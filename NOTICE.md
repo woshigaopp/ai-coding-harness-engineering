@@ -3,9 +3,9 @@
 This repository is an all-English publication version of a practical AI coding
 harness methodology.
 
-It is intentionally product-neutral. Example names such as Connect Cluster,
-VPC, Subnet, Security Group, and IAM Role are used only to make module contracts
-concrete.
+It is intentionally product-neutral. Example names such as Project Workspace,
+Resource Catalog, Resource Group, Access Policy, and Runtime Profile are generic
+software-system examples used only to make module contracts concrete.
 
 The core method is general:
 
@@ -16,4 +16,3 @@ The core method is general:
 - rehydrate context between phases;
 - execute only sealed Atomic Issues;
 - backflow when downstream evidence invalidates upstream assumptions.
-
