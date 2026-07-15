@@ -1,0 +1,114 @@
+schema_version: 1
+protocol: stage-construction-v1
+
+valid_stage_statuses:
+  - not_started
+  - in_progress
+  - blocked
+  - passed
+  - not_applicable
+  - pending-rewrite
+  - pending-rerun
+
+stage_order:
+  - source-intake
+  - prd
+  - aip
+  - readiness
+  - design
+  - archaeology
+  - migration
+  - frontend-contract
+  - contract
+  - verification
+  - task-planning
+  - pre-execution
+  - execution
+  - mock-acceptance
+  - product-acceptance
+  - acceptance
+
+construction_stages:
+  - source-intake
+  - prd
+  - aip
+  - readiness
+  - design
+  - archaeology
+  - migration
+  - frontend-contract
+  - contract
+  - verification
+  - task-planning
+  - mock-acceptance
+  - product-acceptance
+
+plan_snapshot_stages:
+  - aip
+  - readiness
+  - design
+  - archaeology
+  - migration
+  - frontend-contract
+  - contract
+  - verification
+
+receipt_artifacts:
+  source-intake: [workflow-workdir.md, source-intake-ledger.md]
+  prd: [workflow-workdir.md, proposal.md, spec.md, source-intake-ledger.md, decision-reviews/prd-decisions.md, multi-perspective-reviews/prd.yaml]
+  aip: [workflow-workdir.md, aip.md, decision-reviews/aip-decisions.md, multi-perspective-reviews/aip.yaml]
+  readiness: [workflow-workdir.md, aip.md, decision-reviews/aip-decisions.md, multi-perspective-reviews/readiness.yaml]
+  design: [workflow-workdir.md, multi-perspective-reviews/design.yaml]
+  archaeology: [workflow-workdir.md, multi-perspective-reviews/archaeology.yaml]
+  migration: [workflow-workdir.md, multi-perspective-reviews/migration.yaml]
+  frontend-contract: [workflow-workdir.md, frontend-page-inventory.md, frontend-action-inventory.md, frontend-route-component-matrix.md, frontend-mode-field-display-matrix.md, frontend-form-state-matrix.md, frontend-mode-leakage-negative-matrix.md, frontend-api-payload-contract-matrix.md, frontend-fixture-need-matrix.md, frontend-browser-verification-matrix.md, multi-perspective-reviews/frontend-contract.yaml]
+  contract: [workflow-workdir.md, contracts.yaml, contract-semantic-type-matrix.md, api-wire-shape-matrix.md, multi-perspective-reviews/contract.yaml]
+  verification: [workflow-workdir.md, verification.yaml, multi-perspective-reviews/verification.yaml]
+  task-planning: [workflow-workdir.md, tasks.md, task-dag.yaml, atomic-issue-packets.yaml, atomic-task-decomposition.md, compiler-failure-triage.yaml, task-planning-repair-ledger.yaml, atomic-issue-quality-review.yaml, multi-perspective-reviews/task-planning.yaml]
+  pre-execution: [workflow-workdir.md, tasks.md, task-dag.yaml, atomic-issue-packets.yaml, atomic-task-decomposition.md, compiler-failure-triage.yaml, task-planning-repair-ledger.yaml, atomic-issue-quality-review.yaml, multi-perspective-reviews/pre-execution.yaml]
+  execution: [workflow-workdir.md, tasks.md]
+  mock-acceptance: [workflow-workdir.md, mock-backend-matrix.yaml, mock-frontend-action-matrix.yaml, mock-test-dimensions.yaml, mock-acceptance-cases.yaml, mock-fixture-graph.yaml, mock-acceptance-execution.yaml, mock-acceptance.md, multi-perspective-reviews/mock-acceptance.yaml]
+  product-acceptance: [workflow-workdir.md, acceptance/product-acceptance-review.md, multi-perspective-reviews/product-acceptance.yaml]
+
+runtime_prerequisites:
+  - execution
+  - mock-acceptance
+
+prerequisites:
+  prd: [source-intake]
+  aip: [source-intake, prd]
+  readiness: [source-intake, prd, aip]
+  design: [source-intake, prd, aip, readiness]
+  archaeology: [source-intake, prd, aip, readiness]
+  migration: [source-intake, prd, aip, readiness, design, archaeology]
+  frontend-contract: [source-intake, prd, aip, readiness, design, archaeology]
+  contract: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract]
+  verification: [source-intake, prd, aip, readiness, migration, contract, frontend-contract]
+  task-planning: [source-intake, prd, aip, readiness, design, archaeology, migration, contract, frontend-contract, verification]
+  pre-execution: [source-intake, prd, aip, readiness, design, archaeology, migration, contract, frontend-contract, verification, task-planning]
+  execution: [task-planning]
+  acceptance: [execution]
+  mock-acceptance: [execution]
+  product-acceptance: [execution, mock-acceptance]
+
+receipt_kinds:
+  source-intake: stage
+  prd: stage
+  aip: stage
+  readiness: stage
+  design: stage
+  archaeology: stage
+  migration: stage-or-na
+  frontend-contract: stage-or-na
+  contract: stage
+  verification: stage
+  task-planning: stage
+  execution: execution
+  mock-acceptance: stage-or-na
+  product-acceptance: stage-or-na
+
+recovery:
+  reopenable_statuses: [passed, not_applicable]
+  rewrite_status: pending-rewrite
+  execution_reset_status: not_started
+  execution_boundary: execution

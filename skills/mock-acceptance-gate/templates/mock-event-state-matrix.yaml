@@ -1,0 +1,45 @@
+schema_version: 1
+# Generic event/state mock acceptance matrix. Use repo-specific fields
+# only when the target repo defines its own acceptance runtime. For
+# automqbox/CMP Connect features, add cmp-playground/no-cloud evidence in the
+# execution ledger during mock-acceptance/product-acceptance. For automqbox/CMP
+# non-Connect features, use generic mock evidence only.
+
+event_state_rows:
+  - event_state_row_id: MES-xxx-CREATE-ASG-RUNNING
+    coverage_sets: [connect-progress-stateful]
+    source_contract: C-xxx
+    operation: create
+    mode_or_variant: asg
+    from_state: accepted
+    trigger: "Create task starts"
+    guard_or_precondition: "Resolved ASG compute exists"
+    event_or_step: CREATE_ASG_RUNTIME
+    status: running
+    to_state: creating
+    terminal: false
+    retry_or_idempotency: "Retry keeps same cluster id and does not duplicate owned resources"
+    failure_event_or_reason: CREATE_ASG_RUNTIME_FAILED with typed runtime/provider reason
+    producer:
+      real: path/to/real/product/task-or-service
+      acceptance_adapter: path/to/repo/no-cloud-or-mock-runtime-adapter
+    consumers:
+      - path/to/frontend/progress-or-detail-consumer
+      - path/to/backend/status-or-event-consumer
+      - mock-backend-matrix:MBM-xxx-CREATE-ASG-AUTOSCALING
+      - mock-frontend-action-matrix:MFA-xxx-PROGRESS-ASG-RUNNING
+    fixture_refs: [fixture-connect-cluster-asg-running]
+    frontend_assertions:
+      - ASG progress label is visible
+      - K8s pod/deployment/namespace/serviceAccount wording is absent
+      - polling continues while terminal=false
+    backend_assertions:
+      - progress/change API response includes deploymentMode, operation, event_or_step, status, terminal=false
+      - detail and last-change agree on cluster id and status
+    expected_result: Mock event state matches real C-xxx progress contract for ASG create running transition.
+    proves: Stateful progress/change event coverage before packaged/browser acceptance.
+    command: <event-state mock acceptance command for this repo>
+    evidence_refs:
+      - acceptance/event-state/MES-xxx-CREATE-ASG-RUNNING.log
+    result: planned
+    blocks_acceptance: true

@@ -1,0 +1,14 @@
+schema_version: 1
+
+verifications:
+  # VER-001:
+  #   source: [REQ-001, C-001]
+  #   type: integration
+  #   command: ""
+  #   expected_result: ""
+  #   proves: ""
+  #   required: true
+  #   status: planned
+  #   blocks_done: true
+  #   owner: ""
+  {}

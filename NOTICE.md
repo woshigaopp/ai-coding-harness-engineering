@@ -1,18 +1,9 @@
 # Notice
 
-This repository is an all-English publication version of a practical AI coding
-harness methodology.
+This repository publishes the complete AutoMQ AI coding context-pack workflow,
+including its executable runtime, validators, templates, references, stage
+owner skills, and acceptance tooling.
 
-It is intentionally product-neutral. Example names such as Project Workspace,
-Resource Catalog, Resource Group, Access Policy, and Runtime Profile are generic
-software-system examples used only to make module contracts concrete.
-
-The core method is general:
-
-- discover decisions before execution;
-- validate module boundaries;
-- express cross-module semantics as contracts;
-- map contracts to verification;
-- rehydrate context between phases;
-- execute only sealed Atomic Issues;
-- backflow when downstream evidence invalidates upstream assumptions.
+The workflow and examples contain AutoMQ-specific engineering conventions.
+They are provided as an implementation of contract-driven, context-rehydrated,
+gate-validated AI development rather than as a product-neutral specification.

@@ -1,0 +1,137 @@
+schema_version: 2
+workflow:
+  skill: automq-ai-dev-workflow-contextpack
+  profile: full
+  stage_construction_protocol: stage-construction-v1
+  runtime:
+    version: contextpack-runtime-2026.07.14.4
+    manifest_sha256: f19d2094effbf4fbb8291255c7d6e1a8b44cdd5fd4ca974e24fd167e45dc834d
+    component_hashes:
+      product_requirement_design_skill: 7925236001a0fb15a66769753f7e6fdf32ab9d36aa8edf842432204f8589f6a8
+      aip_template_skill: cc32fc7a8d0339e50a4fbce00b38543e16c8f3d82a899b5fbb0d0733ce3dcbeb
+      aip_readiness_review_skill: 655c901afb7e6eeb31dfa4d181bbfc326cc98c818d62901c99738ad95797abaa
+      requirement_readiness_review_skill: ad69ef250bde3096e5541f5ded17b24be92d8846dbe7d15fceba64d613e97bb9
+      new_feature_design_skill: 2442ec443f3cefffacb71bea776850f33d229ab1aab4eef05acbe6eed886709a
+      code_archaeology_sdd_skill: 4604b12e690f558bf888018959db89e983d63f61d39208087cb43ae19cd2082a
+      migration_diff_analysis_skill: e9630b5e3b7b9dd2a30e2ea1b27091444ac0870f9a3257e3ecb2b4a257e0bf74
+      frontend_contract_design_skill: ee0a5de3b4326bdfe4da674cdb598bb23d24c617b38f505160b72aee9da932ba
+      cross_module_contract_sdd_skill: 7787583a22b89f9dc26196bb469383da753d1d9879f080b9d0d53d59283df6cd
+      verification_matrix_skill: 5a5002d48464c0540a033910540e35f681eaa7510b40bb363d5cb2fb4fc4d974
+      atomic_task_planning_skill: 622353abd34e404e8b442dd659edd1b6a25ca55ffe7c6f77bf9bd0e14ba8e3b1
+      atomic_execution_sdd_skill: 2dc0eedc77b415de2d497a54444935044e8534a0ff2ded9dbb0d698f8be490f0
+      mock_acceptance_gate_skill: 50cc7f663c5ee603dbfc6a6a78f5f4db6d5d1f17dbbb20819b05b7e87c446047
+      mock_acceptance_validator: cfdb86d130840fe850d9530ecb0d9a3b874a404a71c2a8492067191c6c86a94c
+      product_acceptance_review_skill: 21429ca0d27dabbb37a954143c2269ba9b7f1c4cafbb5d85837a05c34d789d53
+      convergence_retrospective_skill: 9271b0e1dc06d89b6f19d4a30a0506e305a451d6997e2328e6047b4505ba6f30
+      decision_registry_skill: 49fb7382df2c068fe2ce9fce222640465c9923e86b1c0a7397d63ceda0fd9ffe
+      methodology_skill: 132be8c3753cd73843829efaf4420104a9b705414a1e85552b53f4231453b992
+      stage_construction_contract: 04050bd39531f4f4770aca1d7f382b9080d8920b5c76abd6f3c14345758cf0c5
+      workflow_state_machine: 7e192678ecabc9f42a45dc025d2f6622b38e0a5953e9cabca5f58b623fe8bec7
+      workflowctl: 76912bb16b7ada3996493bc1274053f95926c683d8b9687776ec671e4d3a4ec4
+      validate_artifacts: 91687e55ceb4b51f091e8357fb17b8ce4bd9e3b9de0cb851f4c5385bc7e62511
+      atomic_issue_compile: 15cdaa878ffa4ce44cbd28c9359094cd8d439ef0b3aea87e3febc34d9a8fc4ec
+      validate_skill_suite: dddc826fc9772422b26054d276e2e5d7a709ffe935e58900acd63f5764ed1092
+      atomic_issue_quality_review_template: 5dd708514d1dc250b62121af5c76adf9fc51e4aec18b8e40d23741917e402a6b
+      task_semantic_review_template: 3472aedc84864c2e7e621a2fd4b5f8026ece6d830f0404641ecec8b4f6de6eb1
+      multi_perspective_review_template: 3c6d3b0a96654bf8ae39d11035756930daa24a5622a0d8478576145e38d6a2e7
+      launch_readiness_review_template: c35b1afcf556d6787e481aec8717b81acd14b587580c1783b595f2d239dc059d
+      atomic_issue_packet_schema: 79fc56a90fb845af8fd5d478861f3b5340ac0f7456d8d0300037cb8d8c073f31
+      atomic_issue_template: 1d1f0c9b1da99e38f9b36b881c61c2bac9e60ae240331d4de5ccedd9e76f1973
+      stage_construction_protocol: 3fa3b8adef05d423d5c09bbd2e48a5383f4c3d1cc5868de1e16464062ce85f24
+      artifact_completeness_spec: 85b1868bc16e40be99af387c3500af01aec458727f60e2da8ccabb687a64e702
+      runtime_resource_routing: c4575a264fe8d620366d9efa53bafc59a485477e340f4bf4dcb7ef0fdbc412ca
+      runtime_resource_bundle: 4ea2dd740507d0d938647345a4e5eb75e4093fca33452b8e8bd6c80594ce1994
+      contextpack_skill: fdaf74c365b0070f20820ee25f0026f4388082024e8713d272d9fa68ea431061
+      contextpack_rule_reference: 928ec1832e2c2f2b4c3243fc351e360f63f2120621d623b87e0b53804ce0a05e
+  change_id: CHANGE-ID
+  change_dir_abs: ""
+  worktree_path: ""
+  branch_name: ""
+  base_commit: ""
+  workdir_identity_file: workflow-workdir.md
+  context_pack_required: true
+  repo_isolation_required: false
+
+repo_isolation:
+  target_repo: ""
+  base_branch: ""
+  base_commit: ""
+  uid: ""
+  worktree_path: ""
+  branch_name: ""
+  forbidden_sources: []
+  allowed_sources: []
+  audit_commands: []
+
+stage_status:
+  # Valid values:
+  # - not_started / in_progress / blocked while a stage is being worked.
+  # - passed only after workflowctl.py pass-stage <stage> writes a matching
+  #   stage_receipts.<stage>. Do not hand-edit passed.
+  # - not_applicable only through workflowctl.py mark-stage-na and a matching
+  #   stage_na_receipts.<stage>; profile policy may forbid whole-stage N/A.
+  # - pending-rewrite / pending-rerun after backflow invalidation.
+  # Do not use completed/done. They are not gate states and validators reject them.
+  # Candidate/unlocked artifacts, empty tables, partial packets, or compiler sync checks
+  # never justify passed. Downstream stages may consume only passed/not_applicable
+  # prerequisites that also have valid, non-stale pass/N/A receipts.
+  source-intake: not_started
+  prd: not_started
+  aip: not_started
+  readiness: not_started
+  archaeology: not_started
+  design: not_started
+  migration: not_started
+  frontend-contract: not_started
+  contract: not_started
+  verification: not_started
+  task-planning: not_started
+  execution: not_started
+  mock-acceptance: not_started
+  product-acceptance: not_started
+
+stage_receipts:
+  # workflowctl.py pass-stage <stage> is the only writer for these entries.
+  # Validators reject stage_status.<stage>=passed when this receipt is missing
+  # or when artifact hashes no longer match.
+  # Example:
+  # prd:
+  #   stage: prd
+  #   status: passed
+  #   issued_at: "2026-05-29T00:00:00+00:00"
+  #   validator: workflowctl.py
+  #   command: "python3 .../workflowctl.py validate prd specs/changes/<change-id>"
+  #   artifact_hashes:
+  #     proposal.md: "<sha256>"
+  #     spec.md: "<sha256>"
+  #   receipt_hash: "<sha256>"
+  {}
+
+stage_na_receipts:
+  # workflowctl.py mark-stage-na is the only writer. A raw not_applicable
+  # status without a verified receipt is rejected.
+  {}
+
+allowlist_recoveries:
+  # workflowctl.py recover-task-allowlist appends these entries when task
+  # planning must recover a declared proof owner file after backflow.
+  # Audit-only; it is not permission to add undeclared files.
+  # - task: T001
+  #   files:
+  #     - services/.../RuntimeProofTest.java
+  #   backflow_id: BF-001
+  #   reason: "proof owner file was declared but omitted from allowlist"
+  #   recovered_at: "2026-05-29T00:00:00+00:00"
+  #   command: "python3 .../workflowctl.py recover-task-allowlist ..."
+  #   recovery_hash: "<sha256>"
+  []
+
+not_run:
+  # NR-001:
+  #   source: VER-001
+  #   severity: P1
+  #   reason: ""
+  #   owner: ""
+  #   blocks_done: true
+  #   risk_accepted_by: ""
+  {}

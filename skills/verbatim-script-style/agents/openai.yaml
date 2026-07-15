@@ -1,0 +1,4 @@
+interface:
+  display_name: "逐字稿风格"
+  short_description: "按你的口语推理习惯生成技术分享和知识分享完整逐字稿。"
+  default_prompt: "请按我的逐字稿风格，把这个主题写成一份适合技术或知识分享的逐字稿。"

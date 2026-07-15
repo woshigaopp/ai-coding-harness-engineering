@@ -1,0 +1,89 @@
+schema_version: 1
+workflow:
+  skill: automq-ai-dev-workflow
+  change_id: CHANGE-ID
+  change_dir_abs: ""
+  worktree_path: ""
+  branch_name: ""
+  base_commit: ""
+  workdir_identity_file: workflow-workdir.md
+  context_pack_required: true
+  repo_isolation_required: false
+
+repo_isolation:
+  target_repo: ""
+  base_branch: ""
+  base_commit: ""
+  uid: ""
+  worktree_path: ""
+  branch_name: ""
+  forbidden_sources: []
+  allowed_sources: []
+  audit_commands: []
+
+stage_status:
+  # Valid values:
+  # - not_started / in_progress / blocked while a stage is being worked.
+  # - passed only after workflowctl.py pass-stage <stage> writes a matching
+  #   stage_receipts.<stage>. Do not hand-edit passed.
+  # - not_applicable only with a locked N/A decision.
+  # - pending-rewrite / pending-rerun after backflow invalidation.
+  # Do not use completed/done. They are not gate states and validators reject them.
+  # Candidate/unlocked artifacts, empty tables, partial packets, or compiler sync checks
+  # never justify passed. Downstream stages may consume only passed/not_applicable
+  # prerequisites that also have valid, non-stale stage_receipts.
+  source-intake: not_started
+  prd: not_started
+  aip: not_started
+  readiness: not_started
+  archaeology: not_started
+  design: not_started
+  migration: not_started
+  frontend-contract: not_started
+  contract: not_started
+  verification: not_started
+  task-planning: not_started
+  execution: not_started
+  mock-acceptance: not_started
+  product-acceptance: not_started
+
+stage_receipts:
+  # workflowctl.py pass-stage <stage> is the only writer for these entries.
+  # Validators reject stage_status.<stage>=passed when this receipt is missing
+  # or when artifact hashes no longer match.
+  # Example:
+  # prd:
+  #   stage: prd
+  #   status: passed
+  #   issued_at: "2026-05-29T00:00:00+00:00"
+  #   validator: workflowctl.py
+  #   command: "python3 .../workflowctl.py validate prd specs/changes/<change-id>"
+  #   artifact_hashes:
+  #     proposal.md: "<sha256>"
+  #     spec.md: "<sha256>"
+  #   receipt_hash: "<sha256>"
+  {}
+
+allowlist_recoveries:
+  # workflowctl.py recover-task-allowlist appends these entries when task
+  # planning must recover a declared proof owner file after backflow.
+  # Audit-only; it is not permission to add undeclared files.
+  # - task: T001
+  #   files:
+  #     - services/.../RuntimeProofTest.java
+  #   backflow_id: BF-001
+  #   reason: "proof owner file was declared but omitted from allowlist"
+  #   recovered_at: "2026-05-29T00:00:00+00:00"
+  #   command: "python3 .../workflowctl.py recover-task-allowlist ..."
+  #   recovery_hash: "<sha256>"
+  []
+
+not_run:
+  # NR-001:
+  #   source: VER-001
+  #   severity: P1
+  #   reason: ""
+  #   owner: ""
+  #   blocks_done: true
+  #   risk_accepted_by: ""
+  {}

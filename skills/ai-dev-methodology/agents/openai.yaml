@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Dev Methodology"
+  short_description: "AutoMQ 大需求 AI coding 方法论总览"
+  default_prompt: "Use $ai-dev-methodology to reason about AutoMQ large-feature AI coding workflow and module-boundary methodology."

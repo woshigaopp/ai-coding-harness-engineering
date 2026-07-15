@@ -1,0 +1,59 @@
+schema_version: 1
+
+contracts:
+  # C-001:
+  #   type: frontend-backend
+  #   source: [REQ-001, DEC-001]
+  #   status: locked
+  #   provider_module: ""
+  #   # provider_module must be owner-single and may be set only when every
+  #   # semantic_contract_edge + provider guarantee obligation under this C has
+  #   # the same owner_module. Do not write "MOD-A / MOD-B", "MOD-A and MOD-B",
+  #   # comma-separated modules, proof/acceptance owners, or one module that
+  #   # merely summarizes a mixed-owner C. If a coarse C mixes multiple owners,
+  #   # keep provider_module/provider_issue empty and keep C as a composition
+  #   # index; provider ownership lives in executable_obligations[].owner_module.
+  #   consumer_modules: []
+  #   trigger: ""
+  #   normal_path: ""
+  #   failure_path: ""
+  #   consistency: ""
+  #   timing: ""
+  #   semantic_carriers:
+  #     # Concrete provider/consumer facts that every provider/consumer packet must copy.
+  #     # Include fields, enum values, statuses, errors, defaults, forbidden interpretations,
+  #     # route/API paths, managed resource ownership facts, mock fixture states,
+  #     # and verification expectations.
+  #     - ""
+  #   executable_obligations:
+  #     # Required before task-planning. A coarse C-xxx can be a composition
+  #     # index, but each executable row must have exactly one canonical owner.
+  #     # If one C mixes API carrier, runtime provider, frontend proof, and
+  #     # acceptance proof, split those into separate C-xxx-OBL-yyy rows or
+  #     # backflow to cross-module-contract before generating task-dag.yaml.
+  #     # Provider ownership is only edge_type=semantic_contract_edge AND
+  #     # row_kind=provider guarantee. A semantic_contract_edge row with
+  #     # consumer assumption / verification proof / carrier-only is invalid;
+  #     # consumer/proof/carrier rows must use carrier_order_edge,
+  #     # verification_prerequisite_edge, or proof_only_edge.
+  #     - obligation_id: C-001-OBL-001
+  #       row_kind: provider guarantee / consumer assumption / failure-timing / verification proof / carrier-only / locked N/A
+  #       edge: "MOD-A -> MOD-B"
+  #       edge_type: semantic_contract_edge / carrier_order_edge / verification_prerequisite_edge / proof_only_edge
+  #       semantic_type: Wire/API shape / State machine / External side effect / Resource ownership / UI action closure / acceptance/mock / custom:<name>
+  #       operation_surface: ""
+  #       canonical_owner: ""
+  #       owner_module: ""
+  #       consumer_modules: []
+  #       provider_guarantee: ""
+  #       consumer_assumption: ""
+  #       fields_resource_state: ""
+  #       failure_timing_detail: ""
+  #       state_resource_owner: ""
+  #       verification: VER-001
+  #       split_hint: "provider task / consumer task / proof-only / carrier-only / locked N/A / backflow"
+  #   verification: [VER-001]
+  #   provider_issue: T001
+  #   consumer_issues: [T002]
+  #   materialized_in: [T001, T002]
+  {}

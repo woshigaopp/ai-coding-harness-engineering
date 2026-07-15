@@ -1,0 +1,73 @@
+schema_version: 1
+
+sources:
+  # SRC-001:
+  #   type: requirement
+  #   path: ""
+  #   read_status: read
+  #   used_for: [REQ-001]
+  {}
+
+requirements:
+  # REQ-001:
+  #   type: requirement
+  #   source: SRC-001
+  #   semantics: ""
+  #   semantic_carriers:
+  #     # Dense executable payload that must appear in downstream packets.
+  #     # Examples: field matrices, selector/default/auto-create behavior,
+  #     # managed external resource ownership, forbidden raw text path,
+  #     # error codes, state transitions, timing rules.
+  #     # workflowctl infers dense semantics from semantics text; if this list
+  #     # is missing for dense requirements, task-planning/pre-execution fails.
+  #     - ""
+  #   status: locked
+  #   consumed_by: [C-001, VER-001, T001]
+  #   semantic_carrier_projections:
+  #     # Required for dense REQ/SCN before task-planning. A global REQ/SCN
+  #     # often mixes UI, API, runtime, resource ownership, and acceptance proof.
+  #     # Do not copy the full global carrier into every task. Split it into
+  #     # owner-specific slices first, then copy only the slice into the owner
+  #     # packet semantic_carriers with the same projection_id.
+  #     - projection_id: SCP-001
+  #       owner_module: MOD-EXAMPLE
+  #       owner_task: T001
+  #       operation_surface: create / readback / cleanup / render / proof
+  #       semantic_type: API wire / runtime side effect / managed resource ownership / frontend action / acceptance proof
+  #       must_preserve:
+  #         - "Concrete owner-specific field/resource/state/error/proof detail"
+  #       excluded_owner_semantics:
+  #         - "Concrete sibling owner semantics intentionally not carried by this task"
+  {}
+
+scenarios: {}
+
+semantic_carrier_projections:
+  # Alternative top-level form, useful when one projection consumes multiple
+  # REQ/SCN or when sidecar generation keeps global source objects compact.
+  # REQ-001:
+  #   - projection_id: SCP-001
+  #     owner_module: MOD-EXAMPLE
+  #     owner_task: T001
+  #     operation_surface: create / readback / cleanup / render / proof
+  #     semantic_type: API wire / runtime side effect / managed resource ownership / frontend action / acceptance proof
+  #     must_preserve:
+  #       - "Concrete owner-specific field/resource/state/error/proof detail"
+  #     excluded_owner_semantics:
+  #       - "Concrete sibling owner semantics intentionally not carried by this task"
+  {}
+
+decisions:
+  # DEC-001:
+  #   type: architecture
+  #   decision_key: ""
+  #   decision: ""
+  #   semantic_carriers:
+  #     - ""
+  #   status: locked
+  #   supersedes: []
+  #   superseded_by: null
+  #   affects: [C-001, T001]
+  {}
+
+migrations: {}

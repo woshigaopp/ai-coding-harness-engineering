@@ -1,0 +1,75 @@
+schema_version: 1
+
+# Required when a requirement, contract, task, UI, runtime, mock, or observability
+# path contains lifecycle/progress/event/status/terminal/polling/retry/state graph
+# semantics. Do not leave stateful behavior as prose.
+stateful_behaviors:
+  - behavior_id: SB-xxx-connect-progress
+    source_objects: [REQ-xxx, C-xxx, VER-xxx]
+    owner_module: backend-progress-or-mock-or-frontend-module
+    state_owner: "Which module owns the state/event source of truth"
+    producer: "Task/service/controller/runtime/mock component that produces the state/event"
+    consumers:
+      - "Frontend progress page"
+      - "Detail event list"
+      - "Mock fixture graph"
+    rows:
+      - row_id: SBR-xxx-create-asg-running
+        operation: create
+        mode_or_variant: asg
+        from_state: accepted
+        trigger: "Create task starts"
+        guard_or_precondition: "Deployment mode is ASG and resolved compute exists"
+        event_or_step: "CREATE_ASG_RUNTIME"
+        user_visible_label_or_key: "connect.progress.asg.createRuntime"
+        status: running
+        to_state: creating
+        terminal: false
+        retry_or_idempotency: "Retry keeps same cluster id and does not duplicate owned resources"
+        side_effects:
+          - "InstanceChange step written"
+          - "Progress API returns running step"
+        failure_event_or_reason: "CREATE_ASG_RUNTIME_FAILED with typed provider/runtime reason"
+        forbidden_inherited_behavior:
+          - "No K8s pod/deployment/namespace/serviceAccount wording"
+        api_or_event_fields:
+          - "deploymentMode"
+          - "operation"
+          - "step"
+          - "status"
+          - "reason"
+          - "terminal"
+        frontend_assertion: "Progress page shows ASG runtime label and keeps polling"
+        mock_fixture_ref: "fixture-mode-create-running"
+        verification: VER-xxx
+
+stateful_transition_coverage:
+  - coverage_id: SBC-xxx-mode-progress
+    behavior_id: SB-xxx-mode-progress
+    required_operations: [create, update, resize, vertical-update, delete, retry]
+    required_modes_or_variants: [k8s, asg]
+    required_statuses: [queued, running, success, failed, blocked]
+    required_terminal_states: [success, failed, blocked]
+    full_coverage_required_for:
+      - "all user-reachable transitions"
+      - "all terminal states"
+      - "all failure states"
+    representative_only_allowed_for:
+      - "weakly coupled display variants with locked N/A reason"
+    coverage_decision: "full for operation/mode/status; representative only for non-critical label variants"
+    omitted_combinations: []
+
+stateful_consumer_matrix:
+  - consumer_id: SB-CONS-xxx-progress-page
+    behavior_id: SB-xxx-mode-progress
+    consumer: "Frontend progress page"
+    consumed_rows: [SBR-xxx-create-mode-running]
+    must_show:
+      - "mode-specific label"
+      - "typed failure reason when failed"
+      - "scaling decision fields when autoscaling event exists"
+    must_hide:
+      - "old-mode exclusive resource names"
+    terminal_behavior: "Stop polling and enable/disable follow-up actions according to cluster state"
+    fixture_refs: [fixture-mode-create-running]
+    verification: VER-xxx

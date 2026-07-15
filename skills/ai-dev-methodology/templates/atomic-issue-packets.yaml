@@ -1,0 +1,421 @@
+schema_version: 1
+
+packets:
+  # Do not create placeholder packets. A Txxx packet is executable only after all
+  # required sections below carry concrete source/decision/contract/verification
+  # semantics, the Markdown is compiled from this file, and pre-execution gates pass.
+  # Partial packets and compiler sync are not permission to execute any task.
+  # T001:
+  #   title: ""
+  #   issue_path: atomic-issues/T001.md
+  #   primary_module: ""
+  #   module_responsibility: ""
+  #   # Atomicity rule: one primary module, one user action-flow or one stateful
+  #   # operation, one short verification loop. Split instead of adding more
+  #   # carriers when the issue starts to cover many actions/pages/states.
+  #   owned_state_data_resources: []
+  #   internal_invariants: []
+  #   scope:
+  #     in: []
+  #     out: []
+  #   atomicity_review:
+  #     # Required. Filled before writing the executable packet. This is the
+  #     # generation-time proof that the author applied the Atomicity definition,
+  #     # not a post-hoc validator workaround.
+  #     # Must be filled from ai-dev-methodology/references/full-methodology.md
+  #     # "Atomic Boundary": zero decision, single-layer change, self-contained
+  #     # context, short verification loop, no error propagation.
+  #     atomic_boundary_check:
+  #       zero_decision: ""
+  #       single_layer_change: ""
+  #       self_contained_context: ""
+  #       short_verification_loop: ""
+  #       no_error_propagation: ""
+  #     primary_closure: "one user action-flow / one stateful operation / one provided contract"
+  #     # Use an explicit "N/A: ..." sentence when this dimension is not owned
+  #     # by the packet. Empty lists do not prove non-applicability.
+  #     user_action_flows: []
+  #     stateful_operations: []
+  #     provided_contracts: []
+  #     verification_loops: []
+  #     fileset_reason: ""
+  #     split_candidates_considered: []
+  #     # Required only when the task owns multiple action-flows, stateful
+  #     # operations, or verification loops. Same module/page/related work is
+  #     # not a valid merge reason.
+  #     merge_rationale: ""
+  #     still_atomic_because: ""
+  #     if_not_atomic: "backflow to task planning and split before generating this packet"
+  #   sources:
+  #     # - id: REQ-001
+  #     #   excerpt: ""
+  #     []
+  #   decision_surfaces:
+  #     # Rows consumed from decision-surface-discovery.md. Required when any
+  #     # surface is owned by this task. Source/context appendix alone does not
+  #     # count; each row must also appear in executable packet sections.
+  #     # - surface_id: DS-001
+    #     #   surface_type: mode-consumer / capability / frontend-action / post-create-consumer / persistent-mutation / operation-mutability / managed-resource-ownership / runtime-lifecycle / runtime-mode-materialization-parity / mock-acceptance-runtime / observability / permission / compatibility
+  #     #   object_capability_action: ""
+  #     #   decision: "supported / hidden / disabled-with-reason / unavailable-with-reason / implementation-required / locked N/A"
+  #     #   execution_obligation: "What this task must implement or preserve"
+  #     #   copied_to:
+  #     #     - behavior_details
+  #     #     - provided_contract_obligations
+  #     #     - backend_behavior_verification
+  #     #   verification: VER-001
+  #     []
+  #   external_capability_facts:
+  #     # Rows consumed from external-capability-research.md. Required when this
+  #     # task implements or verifies behavior constrained by official external
+  #     # system facts, constraints, or mechanism mappings. Source/research
+  #     # appendix alone does not count.
+  #     # - fact_id: FACT-001 / CONSTRAINT-001 / MECH-001
+  #     #   external_system: "AWS ASG / Kubernetes HPA / Terraform provider / third-party API"
+  #     #   official_fact: "Concrete official behavior, limit, state, error, timing, default, API/resource, or mechanism mapping"
+  #     #   automq_rule: "What this task must implement, preserve, forbid, or expose because of that fact/constraint/mechanism"
+  #     #   copied_to:
+  #     #     - behavior_details
+  #     #     - backend_behavior_verification
+  #     #     - fixture_needs
+  #     #   verification: VER-001
+  #     #   if_omitted: "Exact bug or false assumption if this external fact is missing"
+  #     []
+  #   semantic_carriers:
+  #     # Required. Carry the concrete semantic payload that must not collapse during task splitting.
+  #     # For REQ/SCN sources, use owner-specific semantic_carrier_projections
+  #     # from semantic-objects.yaml. Copy only the slice owned by this packet;
+  #     # sibling owner semantics belong in excluded_owner_semantics/does_not_carry
+  #     # and must not be stuffed into this task's execution brief.
+  #     # Use one row for each dense requirement/decision/contract phrase such as:
+  #     # selectors/defaults/auto-create, no raw text main path, action->route->API,
+  #     # explicit-unreachable vs unknown, field/error/state/default/timing matrices,
+    #     # persistent mutation state owner / writer / schema-nullability / readback proof,
+    #     # managed external resource ownership create/persist/consume/cleanup semantics.
+  #     # If source excerpts mention dense semantics, atomic_issue_compile.py
+  #     # rejects the packet unless the matching carrier carries the concrete
+  #     # resources, states, errors, forbidden paths, and verification proof.
+  #     # - source: REQ-001 / PDEC-001 / C-001 / VER-001
+  #     #   projection_id: SCP-001
+  #     #   owner_module: MOD-EXAMPLE
+  #     #   operation_surface: create / readback / cleanup / render / proof
+  #     #   semantic_type: API wire / runtime side effect / managed resource ownership / frontend action / acceptance proof
+  #     #   carrier: "Short name for the semantic payload"
+  #     #   must_preserve:
+  #     #     - "Concrete field/state/error/default/timing detail copied verbatim or losslessly paraphrased"
+  #     #   does_not_carry:
+  #     #     - "Sibling owner semantics from the same REQ/SCN intentionally excluded from this task"
+  #     #   copied_to:
+  #     #     # Name packet fields that carry this semantic payload as executable
+  #     #     # behavior. Source/contract appendix alone does not count.
+  #     #     - "behavior_details"
+  #     #     - "implementation_steps"
+  #     #     - "verification"
+  #     #   verification: VER-001
+  #     #   omission_failure: "What exact bug/regression happens if this payload is missing from the issue"
+  #     []
+  #   decisions:
+  #     # - id: DEC-001
+  #     #   decision: ""
+  #     #   why_it_matters: ""
+  #     []
+  #   contract_excerpts:
+  #     # - id: C-001
+  #     #   trigger: ""
+  #     #   normal_path: ""
+  #     #   failure_path: ""
+  #     #   consistency: ""
+  #     #   timing: ""
+  #     #   verification_excerpt: ""
+  #     []
+  #   execution_preconditions:
+  #     # - upstream: C-001
+  #     #   already_true: ""
+  #     #   evidence: ""
+  #     #   if_false: "Stop and backflow to contract/task planning; do not guess in implementation."
+  #     []
+  #   consumed_contract_snapshots:
+  #     # - contract: C-001
+  #     #   provider: T001 / module-name
+  #     #   may_assume: ""
+  #     #   details: ""
+  #     #   forbidden_interpretation: ""
+  #     []
+  #   provided_contract_obligations:
+  #     # Provider ownership is derived only from task-dag.yaml for this Txxx.
+  #     # Every row here must be listed in task-dag.yaml.tasks[Txxx].provides
+  #     # or canonical provides_obligations. Carrier/proof/consumer contracts
+  #     # belong in consumed_contract_snapshots, execution_preconditions,
+  #     # semantic_carriers, verification, or typed DAG edges instead.
+  #     # After changing task-dag provides/consumes, regenerate this packet from
+  #     # scratch; never keep stale "owns/provides/guarantees C-xxx" text.
+  #     # - contract: C-002
+  #     #   downstream_consumer: ""
+  #     #   must_guarantee: ""
+  #     #   observable_output: ""
+  #     #   verification: VER-001
+  #     []
+  #   invariant_carryover:
+  #     # - invariant: ""
+  #     #   source: ""
+  #     #   must_remain_true: ""
+  #     #   regression_check: ""
+  #     []
+  #   preconditions_failure_handling:
+  #     # - failure: ""
+  #     #   classification: contract-materialization-gap
+  #     #   required_backflow: ""
+  #     #   do_not_do: ""
+  #     []
+  #   existing_code_references:
+  #     # - pattern: ""
+  #     #   path: ""
+  #     #   follow: ""
+  #     #   do_not_inherit: ""
+  #     []
+  #   files_to_change:
+  #     # - path: ""
+  #     #   change: ""
+  #     #   notes: ""
+  #     []
+  #   behavior_details:
+  #     inputs: ""
+  #     outputs: ""
+  #     error_behavior: ""
+  #     state_persistence: ""
+  #     # For persistent mutation tasks, this must name the authoritative state
+  #     # owner, writer path, schema/resource compatibility rule, and readback
+  #     # consumers. "Persist canonical state" alone is not sufficient.
+  #     compatibility: ""
+  #     boundary_conditions: ""
+  #   # Required when the task changes backend Java/API/service/domain/persistence/runtime/provider behavior.
+  #   # Compile/build can be supporting evidence, but it cannot close a behavior-changing backend issue.
+  #   backend_layer_boundary:
+  #     # Required when files_to_change touches 3+ backend layers such as API DTO/VO,
+  #     # domain service/entity, persistence DO/repository, async task/runtime.
+  #     primary_layer: ""
+  #     touched_layers: []
+  #     split_decision: ""
+  #     why_not_split: ""
+  #     forbidden_cross_layer_decisions: []
+  #     verification_boundary: ""
+  #   backend_behavior_verification:
+  #     # - behavior_id: BE-001
+  #     #   source: REQ-001 / C-001 / VER-001
+  #     #   entrypoint: "Service method / controller API / task factory / executor method under test"
+  #     #   code_path: "Exact production path being exercised, not a mocked replacement"
+  #     #   input_or_fixture: "Request, persisted row, provider response, runtime state, or fixture variant"
+  #     #   expected_state_or_output: "Typed error, warning, persisted field, event, progress, response body, or state transition"
+  #     #   failure_or_edge: "Negative/edge branch covered by this assertion; use N/A only with reason"
+  #     #   command: "Fresh unit/integration/API/runtime test command; not compile-only"
+  #     #   assertion: "Concrete assertion names or observable checks"
+  #     #   proves: "Which contract/source behavior is proven"
+  #     []
+  #   # Required when the task owns create/update/delete/resize/save/scale/import/bind
+  #   # or a mode/resource-type change that affects persisted/resource state.
+  #   persistent_mutation_proofs:
+  #     # - mutation: create
+  #     #   mode_or_variant: asg
+  #     #   state_owner: "Table/resource/event store/cache/topic that owns the authoritative state"
+  #     #   writer_path: "Exact controller/service/manager/task/repository/resource writer path"
+  #     #   schema_or_resource_constraints:
+  #     #     - "Old required field/resource and the locked nullable/default/derived/forbidden/compat rule"
+  #     #   readback_consumers:
+  #     #     - "detail/list/query/progress/event/frontend/mock consumer that must read the written state"
+  #     #   write_verification: "Command/assertion proving real writer succeeds"
+  #     #   readback_verification: "Command/assertion proving readback sees the same id/state"
+  #     []
+  #   # Required when the task owns auto-create/default-created/generated/select-existing
+  #   # external resource semantics. This is distinct from selector UI/API validation.
+  #   managed_resource_ownership:
+  #     # - resource_type: "SecurityGroup / IAMRole / InstanceProfile / Bucket / K8s object / provider resource"
+  #     #   selection_mode: "auto-create / default-created / generated / select-existing / user-provided / derived"
+  #     #   create_timing: "check / submit / async task / deploy step / runtime reconciliation / N/A with reason"
+  #     #   provider_writer: "Exact production provider/API/operator/resource writer path"
+  #     #   resource_identity: "ID/name/ARN/UID/tag generation and lookup rule"
+  #     #   provenance_state_owner: "Where owned/existing/generated/derived is persisted or read back"
+  #     #   runtime_consumers:
+  #     #     - "deploy/update/detail/list/progress/event/frontend/mock consumer path"
+  #     #   update_rule: "reuse / patch / replace / detach / forbid / N/A with reason"
+  #     #   delete_cleanup_rule: "owned resources cleanup; existing resources protect/detach"
+  #     #   idempotency_rule: "How retries avoid duplicate create or accidental delete"
+  #     #   failure_behavior: "provider error / permission / quota / partial create / cleanup failure status"
+  #     #   verification:
+  #     #     - "provider create/delete/update call proof"
+  #     #     - "ownership persistence/readback proof"
+  #     #     - "cleanup/protect proof"
+  #     []
+  #   # Required when task owns or verifies real external side effects:
+  #   # cloud/K8s/Terraform/IAM/provider SDK/runtime scheduler/third-party API.
+  #   # Copy rows from external-side-effect-contract-matrix.md. This section
+  #   # defines the minimum acceptable production proof and no-cloud/playground
+  #   # substitute boundary; implementation cannot reinterpret it.
+  #   external_side_effects:
+  #     # - effect_id: ESE-001
+  #     #   source: C-001 / VER-001
+  #     #   operation_action: ""
+  #     #   external_system: ""
+  #     #   production_side_effect_owner: "manager/provider/operator/task that must execute"
+  #     #   required_production_call_or_resource_mutation: "Exact call/resource mutation"
+  #     #   no_cloud_or_playground_substitute_boundary: "What can be mocked and what must stay real product path"
+  #     #   minimum_acceptable_proof: "provider call/resource mutation/readback/event proof"
+  #     #   failure_or_partial_failure_semantics: "typed error/state/event/readback"
+  #     #   state_or_readback_consumer: "detail/progress/event/API/frontend/mock consumer"
+  #     #   contract: C-001
+  #     #   verification: VER-001
+  #     []
+  #   # Required when verification proof crosses modules, generated artifacts,
+  #   # local SNAPSHOTs, browser bundles, packaged playground, or representative
+  #   # runtime fixtures. Every proof_file marked required must also appear
+  #   # in files_to_change and task-dag.yaml tasks.<Txxx>.files.
+  #   runtime_test_topology:
+  #     # - topology_id: RTT-001
+  #     #   verification: VER-001
+  #     #   production_path: ""
+  #     #   proof_module_package: ""
+  #     #   proof_file: ""
+  #     #   fixture_support_files: []
+  #     #   required_build_install_freshness_step: ""
+  #     #   staleness_risk_if_skipped: ""
+  #     #   verification_command: ""
+  #     #   expected_result: ""
+  #     []
+  #   # Required when source/contract/verification mentions lifecycle, progress,
+  #   # event, status, terminal, polling, retry, task step, change tracking, or
+  #   # mock state graph. Copy rows from stateful-behavior-matrix.yaml.
+  #   stateful_behavior:
+  #     # - row_id: SBR-001
+  #     #   behavior_id: SB-001
+  #     #   source: C-001 / VER-001
+  #     #   operation: create
+  #     #   mode_or_variant: asg
+  #     #   from_state: accepted
+  #     #   trigger: "Create task starts"
+  #     #   guard_or_precondition: "Resolved compute exists"
+  #     #   event_or_step: CREATE_ASG_RUNTIME
+  #     #   status: running
+  #     #   to_state: creating
+  #     #   terminal: false
+  #     #   failure_event_or_reason: CREATE_ASG_RUNTIME_FAILED with typed reason
+  #     #   producer: "Connect create task"
+  #     #   consumers: ["progress page", "detail event list", "mock fixture graph"]
+  #     #   frontend_assertion: "ASG label visible and K8s pod wording absent"
+  #     #   mock_fixture_ref: fixture-mode-create-running
+  #     #   verification: VER-001
+  #     []
+  #   # Required when the task is frontend/UI/page/form/route/action/browser related.
+  #   frontend_user_task:
+  #     user_task_id: ""
+  #     user_goal: ""
+  #     entry_points: []
+  #     page_routes: []
+  #     visible_controls: []
+  #     required_data: []
+  #     primary_action: ""
+  #     loading_empty_error_states: []
+  #     success_next_state: ""
+  #     failure_feedback: ""
+  #   action_route_component:
+  #     # - action_id: ""
+  #     #   visible_action: ""
+  #     #   source_component: ""
+  #     #   permission_visibility_guard: ""
+  #     #   handler: ""
+  #     #   route_or_api: ""
+  #     #   router_definition: ""
+  #     #   landing_component: ""
+  #     #   mode_branch_required: ""
+  #     #   forbidden_inherited_ui_api: []
+  #     #   success_feedback: ""
+  #     #   failure_feedback: ""
+  #     #   verification: ""
+  #     []
+  #   reference_ui_patterns:
+  #     # Required when product/AIP/frontend contract says "参考 existing UI",
+  #     # "follow existing pattern", "像某页面", "创建体验一致", or names a
+  #     # reference page/component. This turns a soft visual reference into an
+  #     # executable obligation; Source Context alone does not count.
+  #     # - reference_id: UIREF-001
+  #     #   target_surface_or_action: ""
+  #     #   reference_source: "PRD/AIP/source row that requested the reference"
+  #     #   reference_file_or_component: "frontend/.../reference/page.tsx or component.tsx"
+  #     #   must_reuse_or_adapt:
+  #     #     - "Concrete component/layout/section/control/review pattern to reuse or adapt"
+  #     #   must_not_inherit:
+  #     #     - "Reference behavior that does not apply to this feature"
+  #     #   visual_layout_obligation: "Field order, grouping, spacing, section title, review summary, table/detail pattern, or component parity"
+  #     #   interaction_state_obligation: "Loading/empty/error/reset/default/disabled behavior to match"
+  #     #   browser_visual_proof: "Screenshot/DOM/component/visual checklist proving the pattern"
+  #     #   verification: VER-001
+  #     []
+  #   mode_field_display_matrix:
+  #     # - surface: ""
+  #     #   mode_or_state: ""
+  #     #   data_source: ""
+  #     #   must_show: []
+  #     #   must_hide: []
+  #     #   label_i18n: ""
+  #     #   empty_error_state: ""
+  #     #   fixture_ref: ""
+  #     #   assertion: ""
+  #     []
+  #   form_state_matrix:
+  #     # - form_or_step: ""
+  #     #   mode_or_state: ""
+  #     #   active_fields: []
+  #     #   inactive_hidden_fields: []
+  #     #   default_reset_rule: ""
+  #     #   validation_trigger: ""
+  #     #   submit_participation: ""
+  #     #   error_location: ""
+  #     []
+  #   mode_negative_assertions: []
+  #   fixture_needs:
+  #     # - fixture: ""
+  #     #   state_needed: ""
+  #     #   consumer_page_or_action: ""
+  #     #   contract_source: ""
+  #     #   required_for_verification: ""
+  #     []
+  #   # Frontend-only section. Do not emit this section for backend/API/runtime/
+  #   # managed-resource/acceptance-boundary packets just to write N/A. If a
+  #   # non-frontend packet must mention browser proof, put that requirement in
+  #   # consumed_contract_snapshots/prohibited_changes as a handoff to the
+  #   # frontend/proof owner, not as current-task verification.
+  #   browser_verification:
+  #     required: true
+  #     steps: []
+  #     network_assertions: []
+  #     dom_assertions: []
+  #     screenshot_or_trace: []
+  #     negative_assertions: []
+  #     failure_meaning: ""
+  #   # Frontend-only section. Omit for non-frontend packets.
+  #   experience_rubric:
+  #     task_clarity: "2 - evidence"
+  #     form_ergonomics: "2 - evidence"
+  #     state_completeness: "2 - evidence"
+  #     error_readability: "2 - evidence"
+  #     mode_separation: "2 - evidence"
+  #     route_action_closure: "2 - evidence"
+  #     design_consistency: "2 - evidence"
+  #     responsive_layout_sanity: "2 - evidence"
+  #   implementation_steps:
+  #     # Execution-facing steps only. Do not paste carrier/audit text here.
+  #     # Keep at most 8 steps; if more are needed, split the issue.
+  #     # - ""
+  #     []
+  #   verification:
+  #     # - id: VER-001
+  #     #   check: ""
+  #     #   command: ""
+  #     #   expected_result: ""
+  #     #   proves: ""
+  #     #   failure_meaning: ""
+  #     []
+  #   prohibited_changes:
+  #     # - ""
+  #     []
+  #   done_criteria:
+  #     # - ""
+  #     []

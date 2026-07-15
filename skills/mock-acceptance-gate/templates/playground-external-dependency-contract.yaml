@@ -1,0 +1,202 @@
+schema_version: 1
+scope: automqbox-cmp-connect-playground
+external_dependencies:
+  - external_dependency_id: EXT-001
+    category: cloud-api
+    real_dependency: Cloud provider APIs for VPC, Subnet, Security Group, IAM Role, Instance Type, and reachability checks.
+    contract_source: C-xxx / provider adapter source / official cloud API semantics
+    implemented_by:
+      adapter: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudInfraProvider.java
+      simulator: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudRuntimeSimulator.java
+      persistence: seeded SQLite data and no-cloud graph
+    allowed_mock_boundary:
+      - provider option listing
+      - cloud reachability result
+      - cloud validation warning/error state
+    forbidden_mocks:
+      - frontend component
+      - API client
+      - controller
+      - DTO/request/response schema
+      - service/domain logic
+    request_semantics:
+      - VPC is the parent of Subnet and Security Group selectors.
+      - Parent reset invalidates child selections.
+      - ASG create/check requests must not submit Kubernetes namespace or serviceAccount fields.
+    response_semantics:
+      - Selector options include stable ids, display names, parent relations, empty states, loading states, permission errors, and invalid candidate states.
+      - Security Group auto-create must expose Connect runtime port 8083 semantics.
+    error_semantics:
+      - Explicit unreachable network blocks create with field-specific error.
+      - Unknown reachability is warning-only if the locked product contract says create can continue.
+    status_semantics:
+      - reachable
+      - warning
+      - unreachable
+      - unavailable
+    fixture_refs:
+      - PFG-001
+      - PFG-002
+      - PFG-003
+    scenario_refs:
+      - PSN-001
+    real_consumers:
+      frontend: frontend/cmp-app/src/pages/connect/clusters/create
+      api_client: frontend/cmp-app/src/service/interface/connect.ts
+      controller: cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ProviderController.java
+      service_or_domain: cmp/cmp-service provider/client contract
+    drift_guards:
+      - cmp_playground_contract_audit.py proves ProviderController is routed as REAL_CONTROLLER_PATH.
+      - Frontend action matrix asserts selector DOM state, reset behavior, payload absence, and network method/path/body.
+    result: planned
+
+  - external_dependency_id: EXT-002
+    category: connect-rest-api
+    real_dependency: Kafka Connect worker REST API for plugin, connector, status, task, worker, pause/resume/restart, and metrics endpoint access.
+    contract_source: C-xxx / Connect runtime source / locked ConnectCluster runtime contract
+    implemented_by:
+      adapter: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudConnectRestClient.java
+      simulator: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudRuntimeSimulator.java
+      persistence: real DB rows plus no-cloud runtime graph
+    allowed_mock_boundary:
+      - worker REST availability
+      - worker status
+      - connector task status
+      - no-cloud state transition timing
+    forbidden_mocks:
+      - frontend component
+      - API client
+      - controller
+      - DTO/request/response schema
+      - service/domain logic
+    request_semantics:
+      - Connector create/update/pause/resume/restart/delete requests enter real ConnectorController methods.
+      - Runtime reads must be tied to the created ConnectCluster and Connector ids.
+    response_semantics:
+      - Worker ids preserve Connect REST port 8083.
+      - Connector tasks and workers are derived from connector taskCount and cluster worker count.
+      - Created resources appear in list, detail, progress/change, tasks, workers, metrics, and logs.
+    error_semantics:
+      - Missing connector or cluster returns the real domain error contract.
+      - Runtime unavailable can be represented only as a locked status/error branch, not as generic success.
+    status_semantics:
+      - CREATING
+      - RUNNING
+      - CHANGING
+      - PAUSED
+      - DELETING
+      - FAILED
+    fixture_refs:
+      - PFG-004
+      - PFG-005
+      - PFG-006
+      - PFG-007
+      - PFG-008
+    scenario_refs:
+      - PSN-001
+    real_consumers:
+      frontend: frontend/cmp-app/src/pages/connect
+      api_client: frontend/cmp-app/src/service/interface/connect.ts
+      controller: cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ConnectorController.java
+      service_or_domain: cmp/cmp-service ConnectCluster/Connector services
+    drift_guards:
+      - Static AOP audit proves ConnectCluster/Connector controllers are REAL_CONTROLLER_PATH.
+      - Scenario graph proves downstream connector/tasks/workers after cluster create.
+    result: planned
+
+  - external_dependency_id: EXT-003
+    category: connect-rest-api
+    real_dependency: Connect worker metrics endpoint consumed by the real metrics service.
+    contract_source: C-xxx / metrics service contract / locked observability semantics
+    implemented_by:
+      adapter: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudMetricsServer.java
+      simulator: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudRuntimeSimulator.java
+      persistence: real Connect pod endpoint DB rows point at the no-cloud metrics endpoint
+    allowed_mock_boundary:
+      - metric series values
+      - empty/unavailable/query-error branches
+    forbidden_mocks:
+      - frontend component
+      - API client
+      - controller
+      - DTO/request/response schema
+      - service/domain logic
+    request_semantics:
+      - Metrics requests use real API client and real controller route for the selected cluster or connector id.
+    response_semantics:
+      - Metric series shape, timestamp ordering, current value, empty state, unavailable state, and query error state match the locked contract.
+    error_semantics:
+      - Empty metrics, zero metrics, query error, and unavailable are distinguishable.
+    status_semantics:
+      - available
+      - empty
+      - zero
+      - query_error
+      - unavailable
+    fixture_refs:
+      - PFG-009
+    scenario_refs:
+      - PSN-001
+    real_consumers:
+      frontend: frontend/cmp-app/src/pages/connect
+      api_client: frontend/cmp-app/src/service/interface/connect.ts
+      controller: cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ConnectorController.java
+      service_or_domain: cmp/cmp-service metrics service contract
+    drift_guards:
+      - Backend matrix distinguishes zero/empty/query_error/unavailable.
+      - Frontend matrix asserts rendered chart/empty/error states.
+    result: planned
+
+  - external_dependency_id: EXT-004
+    category: k8s-api
+    real_dependency: Kubernetes pod log API consumed by the real log service.
+    contract_source: C-xxx / log query contract / locked log semantics
+    implemented_by:
+      adapter: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudKubernetesApiServer.java
+      simulator: cmp-playground/src/main/java/com/automq/cmp/playground/nocloud/NoCloudRuntimeSimulator.java
+      persistence: no-cloud pod graph
+    allowed_mock_boundary:
+      - log entries
+      - filters
+      - pagination/truncation
+      - unavailable branches
+    forbidden_mocks:
+      - frontend component
+      - API client
+      - controller
+      - DTO/request/response schema
+      - service/domain logic
+    request_semantics:
+      - Logs requests use real route/query params and selected cluster or connector id.
+    response_semantics:
+      - Log entries include timestamp, level, pod/worker id, message, and filterable fields.
+      - Empty, truncated, filtered, and unavailable states are distinct.
+    error_semantics:
+      - Missing connector/cluster and unavailable log backend are not generic success.
+    status_semantics:
+      - available
+      - empty
+      - filtered
+      - truncated
+      - unavailable
+    fixture_refs:
+      - PFG-010
+    scenario_refs:
+      - PSN-001
+    real_consumers:
+      frontend: frontend/cmp-app/src/pages/connect
+      api_client: frontend/cmp-app/src/service/interface/connect.ts
+      controller: cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ConnectorController.java
+      service_or_domain: cmp/cmp-service log service contract
+    drift_guards:
+      - Backend matrix asserts query/filter/empty/truncated branches.
+      - Frontend matrix asserts log tab DOM and no stale K8s pod-only leakage for ASG mode unless locked.
+    result: planned
+
+playground_capability_gaps:
+  - gap_id: PG-GAP-001
+    description: If current cmp-playground cannot represent any required external dependency status or cross-domain graph edge, create or update runtime module code instead of bypassing acceptance.
+    backflow_target: atomic task for cmp-playground/mock acceptance owner
+    owner_atomic_issue: Txxx
+    blocks_acceptance: true
+    status: planned

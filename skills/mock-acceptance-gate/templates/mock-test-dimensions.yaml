@@ -1,0 +1,36 @@
+schema_version: 1
+dimensions:
+  action:
+    values:
+      - create-submit
+  deploymentMode:
+    values: [asg]
+  capacityMode:
+    values: [autoscaling]
+  selectorState:
+    values: [existing]
+  runtimeState:
+    values: [running]
+  negativeAssertion:
+    values: [no-inactive-mode-payload]
+
+coverage_sets:
+  - id: connect-create-main-path
+    targets: [backend_matrix, frontend_action_matrix, packaged_cases]
+    dimensions: [action, deploymentMode, capacityMode]
+    values:
+      action: [create-submit]
+    max_expected_cases: 4
+  - id: provider-selector-state
+    targets: [backend_matrix, frontend_action_matrix]
+    dimensions: [action, deploymentMode, selectorState]
+    values:
+      action: [create-submit]
+      deploymentMode: [asg]
+    max_expected_cases: 4
+  - id: mode-leakage-negative
+    targets: [frontend_action_matrix, packaged_cases]
+    dimensions: [action, deploymentMode, negativeAssertion]
+    values:
+      action: [create-submit]
+    max_expected_cases: 4
