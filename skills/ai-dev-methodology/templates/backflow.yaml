@@ -1,0 +1,30 @@
+schema_version: 1
+
+triggers:
+  # BF-001:
+  #   found_in: product_acceptance
+  #   category: frontend-contract-gap
+  #   earliest_missing_stage: frontend-contract
+  #   required_backflow: ""
+  #   # open/blocked while affected artifacts are invalid. Set resolved/closed
+  #   # only after affected DEC/C/VER/T artifacts are repaired and ready for
+  #   # workflowctl.py reseal-execution-backflow.
+  #   status: open
+  #   invalidates:
+  #     # Every planning artifact edited after execution starts must be listed
+  #     # here, either as an exact relative path or a narrow glob.
+  #     artifacts: []
+  #     # Fill only the earliest known invalidated objects. workflowctl.py
+  #     # backflow will expand decisions/contracts/verifications/tasks through
+  #     # contract source, provider/consumer issue, verification source, and DAG.
+  #     decisions: []
+  #     contracts: []
+  #     verifications: []
+  #     tasks: []
+  {}
+
+supersession:
+  # DEC-001:
+  #   new_object: DEC-002
+  #   reason: ""
+  {}

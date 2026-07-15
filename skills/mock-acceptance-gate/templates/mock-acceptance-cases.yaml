@@ -1,0 +1,78 @@
+schema_version: 1
+# Generic packaged/runtime representative case template. Use repo-specific
+# fields only when the target repo defines its own acceptance runtime. For
+# automqbox/CMP Connect features, that runtime is packaged playground, so add
+# playground_* refs and automqbox/CMP audit evidence. For automqbox/CMP
+# non-Connect features, use generic packaged/runtime cases only.
+cases:
+  - case_id: MAC-xxx-ASG-CREATE
+    coverage_sets: [connect-create-main-path, provider-selector-state, mode-leakage-negative]
+    dimensions:
+      action: create-submit
+      deploymentMode: asg
+      capacityMode: autoscaling
+      selectorState: existing
+      negativeAssertion: no-inactive-mode-payload
+    user_goal: User completes the locked workflow through the packaged/runtime UI; automqbox/CMP uses packaged playground only for Connect features in mock-acceptance/product-acceptance stages.
+    contract_source: C-xxx / VER-xxx
+    frontend_route: /connect/clusters/create
+    real_code_under_test:
+      frontend: frontend/cmp-app/src/pages/connect/clusters/create
+      api_client: frontend/cmp-app/src/service/interface/connect.ts
+      controller: cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ConnectClusterController.java
+      service: cmp/cmp-service/src/main/java/com/automq/cmp/service/impl/ConnectClusterServiceImpl.java
+    mock_boundary:
+      mocked_external_dependencies: [cloud-api, k8s-api, kafka-instance-api, connect-rest-api]
+      forbidden_mocks: [frontend component, API client, controller, DTO/request/response schema, service]
+    fixture_refs: [fixture-provider-main, fixture-connect-cluster-asg-running]
+    event_state_refs: [MES-xxx-CREATE-ASG-RUNNING]
+    repo_specific_acceptance_refs: []
+    # automqbox/CMP only:
+    # playground_external_dependency_refs: [EXT-001, EXT-002, EXT-003, EXT-004]
+    # playground_domain_fixture_refs: [PFG-001, PFG-002, PFG-003, PFG-004, PFG-005, PFG-006, PFG-007, PFG-008, PFG-009, PFG-010]
+    # playground_scenario_refs: [PSN-001]
+    backend_matrix_refs: [MBM-xxx-CREATE-ASG-AUTOSCALING]
+    frontend_action_refs: [MFM-xxx-ASG-CREATE-SUBMIT]
+    browser_steps:
+      - open /connect/clusters/create
+      - select deploymentMode=asg
+      - expand VPC selector and choose fixture VPC
+      - expand Subnet selector and choose fixture subnet
+      - expand Security Group selector and choose fixture security group or auto-create
+      - expand IAM Role selector and choose fixture role or auto-create
+      - expand Instance Type selector and choose fixture type
+      - click Submit
+    command: <packaged/runtime representative browser or API+DOM command>
+    expected_result: Packaged runtime ASG create lifecycle case runs through real frontend/API/controller/service paths and only external dependencies are mocked.
+    proves: Representative packaged/runtime case consumes backend/frontend matrices instead of proving only a route smoke. automqbox/CMP additionally consumes the runtime scenario graph.
+    network_assertions:
+      - POST /connect/clusters/check body includes deployment.type=asg and capacity.type=autoscaling
+      - POST /connect/clusters body includes workerSpec.asg.instanceType
+      - request body does not include kubernetes namespace or serviceAccount
+    state_assertions:
+      - authoritative product state is written for the created cluster id
+      - backend matrix readback proof has already passed for the referenced create row
+    dom_assertions:
+      - ASG selector controls are visible and selected values are shown
+      - success navigates to progress or detail state
+      - K8s-only namespace/serviceAccount controls are absent
+    api_assertions:
+      - create response returns a created cluster id or equivalent created-resource identifier
+      - detail API returns deployment.type=asg and workerSpec.asg.instanceType
+      - last-change/progress API returns a terminal or in-progress state tied to the created cluster
+    negative_assertions:
+      - no raw AWS ID text box is used in the ordinary path
+      - no inactive K8s fields are submitted
+      - no mock-only API endpoint is called
+      - no real cloud/K8s/kafka instance/Connect worker call is observed outside no-cloud adapters
+    evidence_refs:
+      - acceptance/repo-specific-runtime-audit.md
+      # automqbox/CMP only:
+      # - acceptance/cmp-playground-contract-audit.md
+      - acceptance/cmp-playground-audit.json
+      - acceptance/browser/MAC-xxx-ASG-CREATE.trace.zip
+      - acceptance/network/MAC-xxx-ASG-CREATE.har
+      - acceptance/screenshots/MAC-xxx-ASG-CREATE.png
+      - acceptance/logs/MAC-xxx-ASG-CREATE.log
+    result: planned
+    blocks_acceptance: true

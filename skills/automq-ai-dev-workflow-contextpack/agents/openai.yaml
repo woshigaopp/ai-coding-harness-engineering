@@ -1,0 +1,4 @@
+interface:
+  display_name: "AutoMQ AI Dev Workflow Contextpack"
+  short_description: "以阶段构造协议推进 AutoMQ 大需求设计、实现与验收闭环"
+  default_prompt: "Use $automq-ai-dev-workflow-contextpack to run this AutoMQ large-feature workflow with stage preflight, incremental obligations, receipts, implementation, and acceptance."

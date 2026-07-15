@@ -1,0 +1,1045 @@
+schema_version: 1
+protocol: stage-construction-v1
+
+defaults:
+  closed_statuses:
+    - closed
+    - not_applicable
+  required_closure:
+    - canonical_artifacts
+    - evidence
+    - downstream_consumers
+  not_applicable_required:
+    - reason
+    - product_semantics
+    - verification
+  closure_fields_available_by_stage:
+    source-intake:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - downstream_consumers
+    prd:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+    aip:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+    readiness:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+    design:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+    archaeology:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+    migration:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+    frontend-contract:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+    contract:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - negative_assertions
+      - downstream_consumers
+    verification:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+    task-planning:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+    mock-acceptance:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+    product-acceptance:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+scan_sources:
+  - workflow-workdir.md
+  - source-intake-ledger.md
+  - proposal.md
+  - spec.md
+  - aip.md
+  - plan.md
+  - decision-surface-discovery.md
+  - external-capability-research.md
+  - mechanism-design-model.md
+  - frontend-action-inventory.md
+  - external-side-effect-contract-matrix.md
+  - semantic-objects.yaml
+  - contracts.yaml
+  - verification.yaml
+  - task-dag.yaml
+  - atomic-planning-context-pack.md
+  - acceptance-context-pack.md
+  - mock-acceptance.md
+
+scan_sources_by_stage:
+  source-intake:
+    - workflow-workdir.md
+    - source-intake-ledger.md
+  prd:
+    - workflow-workdir.md
+    - source-intake-ledger.md
+    - proposal.md
+    - spec.md
+    - decision-surface-discovery.md
+  aip:
+    - source-intake-ledger.md
+    - proposal.md
+    - spec.md
+    - aip.md
+    - plan.md
+    - decision-surface-discovery.md
+    - external-capability-research.md
+    - mechanism-design-model.md
+  readiness:
+    - source-intake-ledger.md
+    - proposal.md
+    - spec.md
+    - aip.md
+    - plan.md
+    - decision-surface-discovery.md
+    - external-capability-research.md
+    - mechanism-design-model.md
+  design:
+    - proposal.md
+    - spec.md
+    - aip.md
+    - plan.md
+    - design-context-pack.md
+    - decision-surface-discovery.md
+    - semantic-objects.yaml
+  archaeology:
+    - proposal.md
+    - spec.md
+    - aip.md
+    - plan.md
+    - design-context-pack.md
+    - decision-surface-discovery.md
+    - semantic-objects.yaml
+  migration:
+    - proposal.md
+    - spec.md
+    - plan.md
+    - semantic-objects.yaml
+  frontend-contract:
+    - proposal.md
+    - spec.md
+    - plan.md
+    - contract-context-pack.md
+    - decision-surface-discovery.md
+    - frontend-action-inventory.md
+    - semantic-objects.yaml
+  contract:
+    - proposal.md
+    - spec.md
+    - plan.md
+    - contract-context-pack.md
+    - decision-surface-discovery.md
+    - frontend-action-inventory.md
+    - external-side-effect-contract-matrix.md
+    - semantic-objects.yaml
+    - contracts.yaml
+  verification:
+    - proposal.md
+    - spec.md
+    - plan.md
+    - contracts.yaml
+    - verification.yaml
+    - external-side-effect-contract-matrix.md
+  task-planning:
+    - plan.md
+    - contracts.yaml
+    - verification.yaml
+    - task-dag.yaml
+    - atomic-planning-context-pack.md
+    - atomic-task-decomposition.md
+    - atomic-issue-packets.yaml
+    - external-side-effect-contract-matrix.md
+  mock-acceptance:
+    - acceptance-context-pack.md
+    - mock-acceptance.md
+    - mock-acceptance-execution.yaml
+  product-acceptance:
+    - acceptance-context-pack.md
+    - mock-acceptance.md
+    - mock-acceptance-execution.yaml
+    - product-acceptance.md
+
+rules:
+  SC-WORKDIR-001:
+    title: 固定 workflow 执行身份
+    earliest_stage: source-intake
+    phase: preflight
+    rationale: 工作目录、分支或 change-id 漂移会让后续全部证据失真。
+    repair_stage: source-intake
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+
+  SC-SOURCE-001:
+    title: 关闭输入读取、映射和冲突
+    earliest_stage: source-intake
+    phase: incremental
+    rationale: 未读或互相冲突的 behavior-affecting source 不能成为下游事实。
+    repair_stage: source-intake
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - downstream_consumers
+
+  SC-AUTH-001:
+    title: 锁定人类决策参与模式与授权范围
+    earliest_stage: source-intake
+    phase: incremental
+    rationale: 未记录的授权会让后续阶段错误地替人锁定产品或工程决策。
+    repair_stage: source-intake
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - downstream_consumers
+
+  SC-CURRENT-STATE-001:
+    title: 用代码范围和停止条件证明当前实现理解
+    earliest_stage: prd
+    phase: incremental
+    rationale: PRD 和设计不能从需求文本直接猜测当前产品行为。
+    repair_stage: prd
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - downstream_consumers
+
+  SC-PRD-SEMANTICS-001:
+    title: 闭合用户、对象、状态、错误、权限和验收语义
+    earliest_stage: prd
+    phase: incremental
+    rationale: 用户可见语义如果未在 PRD 锁定，会在工程阶段变成隐式产品决策。
+    repair_stage: prd
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - verifications
+      - downstream_consumers
+
+  SC-SURFACE-001:
+    title: 发现并投影决策面义务
+    earliest_stage: prd
+    phase: incremental
+    rationale: 未被识别的决策点不会自动进入契约、验证或 Atomic Issue。
+    repair_stage: prd
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+
+  SC-HUMAN-DECISION-001:
+    title: 逐条关闭需要人类参与的决策
+    earliest_stage: prd
+    phase: incremental
+    rationale: 批量确认或模糊授权不能关闭具体产品或工程决策。
+    repair_stage: prd
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - downstream_consumers
+
+  SC-AIP-MECHANISM-001:
+    title: 将架构方向降解为可执行机制模型
+    earliest_stage: aip
+    phase: incremental
+    rationale: 只有能力方向而没有 operation、API、状态、资源和失败机制，无法生成零决策契约。
+    repair_stage: aip
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - semantic_objects
+      - verifications
+      - downstream_consumers
+
+  SC-EXTERNAL-FACT-001:
+    title: 锁定影响设计的外部能力事实
+    earliest_stage: aip
+    phase: incremental
+    rationale: 云、K8s、第三方 API 和 runtime 能力不能由产品需求反推。
+    repair_stage: aip
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - verifications
+      - downstream_consumers
+
+  SC-READINESS-001:
+    title: 证明产品、架构和验证决策可被工程阶段消费
+    earliest_stage: readiness
+    phase: final
+    rationale: readiness 必须拒绝 open decision、未消费 source 和只有方向的 AIP。
+    repair_stage: readiness
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - semantic_objects
+      - downstream_consumers
+
+  SC-MODULE-BOUNDARY-001:
+    title: 锁定模块数据、状态和资源所有权
+    earliest_stage: design
+    phase: incremental
+    rationale: 未验证的模块边界会把跨模块决策重新塞入实现任务。
+    repair_stage: design
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - semantic_objects
+      - negative_assertions
+      - downstream_consumers
+
+  SC-ARCHAEOLOGY-001:
+    title: 关闭旧实现事实、隐式约束和框架语义
+    earliest_stage: archaeology
+    phase: incremental
+    rationale: 旧状态机、兼容字段和 consumer 未进入设计会造成可避免回流。
+    repair_stage: archaeology
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - negative_assertions
+      - downstream_consumers
+
+  SC-MIGRATION-001:
+    title: 逐项锁定旧新语义的 delete keep modify add
+    earliest_stage: migration
+    phase: incremental
+    rationale: 迁移不能只描述目标状态，必须处理旧字段、状态、consumer 和回滚。
+    repair_stage: migration
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - semantic_objects
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-FRONTEND-ACTION-001:
+    title: 闭合 action route component API feedback
+    earliest_stage: frontend-contract
+    phase: incremental
+    rationale: 可见按钮和表单如果没有落到真实 route、component 和 API，会在实现后才暴露路径错误。
+    repair_stage: frontend-contract
+    allow_not_applicable: true
+    decompose_by:
+      object_patterns: ['UI-ACT-\d{3}']
+      headings: [Frontend Action Inventory]
+      typed_required_from_stage: frontend-contract
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-CONTRACT-OWNER-001:
+    title: 锁定 provider consumer 与权威状态 owner
+    earliest_stage: contract
+    phase: incremental
+    rationale: consumer、DB readback 或 mock 不能替代生产 provider 的真实保证。
+    repair_stage: contract
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - contracts
+      - negative_assertions
+      - downstream_consumers
+
+  SC-CONTRACT-SEMANTICS-001:
+    title: 闭合 Trigger Normal Failure Consistency Timing
+    earliest_stage: contract
+    phase: incremental
+    rationale: 只有契约名称和方向无法成为 Atomic Issue 的可执行输入。
+    repair_stage: contract
+    allow_not_applicable: false
+    decompose_by:
+      object_patterns: ['C-\d{3}-OBL-\d{3}']
+      headings: [Executable Obligations]
+      yaml_paths: [contracts.*.executable_obligations.*.id]
+      typed_required_from_stage: contract
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-VERIFICATION-COVERAGE-001:
+    title: 为每个 REQ SCN DEC C MIG 建立足够证明
+    earliest_stage: verification
+    phase: incremental
+    rationale: 验证后置会让错误跨任务传播，局部单测也不能关闭组合语义。
+    repair_stage: verification
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-VERIFICATION-FEASIBILITY-001:
+    title: 锁定环境 fixture owner expected result 与 Not Run
+    earliest_stage: verification
+    phase: incremental
+    rationale: 不可执行或没有 expected result 的验证不能进入 Atomic Issue。
+    repair_stage: verification
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - verifications
+      - downstream_consumers
+
+  SC-TASK-OWNER-SLICE-001:
+    title: 将全局语义投影到 canonical owner slice
+    earliest_stage: task-planning
+    phase: incremental
+    rationale: 直接把全局 REQ 或粗 contract 塞进多个任务会混淆 provider 和 consumer 责任。
+    repair_stage: task-planning
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - contracts
+      - verifications
+      - downstream_consumers
+
+  SC-TASK-PACKET-001:
+    title: 物化自包含 Atomic Issue packet
+    earliest_stage: task-planning
+    phase: incremental
+    rationale: 任务必须复制执行前提、契约、决策、文件步骤、验证和失败回流，不能只引用 ID。
+    repair_stage: task-planning
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-TASK-DAG-001:
+    title: 证明 provider consumer 和 verification 拓扑
+    earliest_stage: task-planning
+    phase: final
+    rationale: 没有 DAG 就无法保证失败不污染后续任务输入。
+    repair_stage: task-planning
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - contracts
+      - verifications
+      - downstream_consumers
+
+  SC-MOCK-BACKEND-001:
+    title: 执行真实 controller service adapter 的后端 mock matrix
+    earliest_stage: mock-acceptance
+    phase: incremental
+    rationale: service fixture 或 DB-only success 不能证明生产调用路径。
+    repair_stage: mock-acceptance
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-MOCK-FRONTEND-001:
+    title: 执行真实 route component API client 的前端 action matrix
+    earliest_stage: mock-acceptance
+    phase: incremental
+    rationale: build lint 和静态 payload fixture 不能关闭用户操作流程。
+    repair_stage: mock-acceptance
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-RUNTIME-FRESHNESS-001:
+    title: 证明 packaged runtime 使用当前 branch bundle package process
+    earliest_stage: mock-acceptance
+    phase: final
+    rationale: stale bundle 或旧进程会产生无效浏览器证据。
+    repair_stage: mock-acceptance
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - verifications
+      - downstream_consumers
+
+  SC-PRODUCT-ACCEPTANCE-001:
+    title: 用真实入口证明用户旅程和产品语义
+    earliest_stage: product-acceptance
+    phase: incremental
+    rationale: 自动化 proof 通过后仍需检查 mode 泄漏、状态冲突和真实 action landing。
+    repair_stage: product-acceptance
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-STATEFUL-001:
+    title: 展开 operation 状态迁移 producer consumer terminal failure
+    earliest_stage: prd
+    phase: incremental
+    rationale: lifecycle progress event status 不能压缩成一句实现要求。
+    repair_stage: prd
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-MANAGED-RESOURCE-001:
+    title: 展开 managed resource 创建身份归属读回清理保护
+    earliest_stage: prd
+    phase: incremental
+    rationale: selector 和持久化读回不能关闭真实 provider resource 生命周期。
+    repair_stage: prd
+    allow_not_applicable: true
+    decompose_by:
+      object_patterns: ['MRO-\d{3}', 'RMM-\d{3}', 'RLM-\d{3}', 'ESE-\d{3}']
+      headings: [Managed Resource Ownership Matrix]
+      typed_required_from_stage: contract
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-OPERATION-MUTABILITY-001:
+    title: 按字段锁定 create 后的 update recreate migrate unsupported
+    earliest_stage: prd
+    phase: incremental
+    rationale: create DTO 或 readback 字段不能证明普通 update 能力。
+    repair_stage: prd
+    allow_not_applicable: true
+    decompose_by:
+      object_patterns: ['OPM-\d{3}', 'DS-\d{3}-OBL-[A-Z0-9-]+']
+      headings: [Operation Mutability Matrix, Surface Obligation Projection Matrix]
+      typed_required_from_stage: contract
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-EXTERNAL-SIDE-EFFECT-001:
+    title: 区分生产副作用与验收 adapter 替身
+    earliest_stage: aip
+    phase: incremental
+    rationale: no-cloud acceptance 不能降低生产 provider API 或 runtime mutation 义务。
+    repair_stage: aip
+    allow_not_applicable: true
+    decompose_by:
+      object_patterns: ['ESE-\d{3}']
+      headings: [External Side Effect Contract Matrix]
+      typed_required_from_stage: contract
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-RUNTIME-PARITY-001:
+    title: 证明新 mode 的 runtime materialization capability parity
+    earliest_stage: prd
+    phase: incremental
+    rationale: 资源存在不能证明 config plugin secret bootstrap entrypoint 和 readback 等价。
+    repair_stage: prd
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - decisions
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+  SC-MOCK-BOUNDARY-001:
+    title: 锁定 mock real boundary 与 drift guard
+    earliest_stage: contract
+    phase: incremental
+    rationale: mock 只能替代物理外部依赖，必须与生产 API 和前端消费契约同构。
+    repair_stage: contract
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - contracts
+      - verifications
+      - negative_assertions
+      - downstream_consumers
+
+triggers:
+  frontend:
+    patterns:
+      - frontend
+      - UI
+      - page
+      - route
+      - button
+      - form
+      - 页面
+      - 按钮
+      - 表单
+      - 路由
+    rules_by_stage:
+      frontend-contract:
+        - SC-FRONTEND-ACTION-001
+      contract:
+        - SC-FRONTEND-ACTION-001
+      verification:
+        - SC-FRONTEND-ACTION-001
+      task-planning:
+        - SC-FRONTEND-ACTION-001
+      mock-acceptance:
+        - SC-MOCK-FRONTEND-001
+      product-acceptance:
+        - SC-PRODUCT-ACCEPTANCE-001
+
+  stateful-behavior:
+    patterns:
+      - lifecycle
+      - progress
+      - event producer
+      - event consumer
+      - status transition
+      - terminal
+      - polling
+      - retry
+      - 生命周期
+      - 进度
+      - 事件生产
+      - 事件消费
+      - 状态流转
+      - 终态
+      - 重试
+    rules_by_stage:
+      prd:
+        - SC-STATEFUL-001
+      aip:
+        - SC-STATEFUL-001
+      design:
+        - SC-STATEFUL-001
+      archaeology:
+        - SC-STATEFUL-001
+      contract:
+        - SC-STATEFUL-001
+      verification:
+        - SC-STATEFUL-001
+      task-planning:
+        - SC-STATEFUL-001
+      mock-acceptance:
+        - SC-STATEFUL-001
+      product-acceptance:
+        - SC-STATEFUL-001
+
+  managed-resource:
+    patterns:
+      - auto-create
+      - default-created
+      - generated resource
+      - managed resource
+      - select-existing
+      - 自动创建
+      - 默认创建
+      - 托管资源
+      - 选择已有
+    rules_by_stage:
+      prd:
+        - SC-MANAGED-RESOURCE-001
+      aip:
+        - SC-MANAGED-RESOURCE-001
+      design:
+        - SC-MANAGED-RESOURCE-001
+      archaeology:
+        - SC-MANAGED-RESOURCE-001
+      migration:
+        - SC-MANAGED-RESOURCE-001
+      contract:
+        - SC-MANAGED-RESOURCE-001
+      verification:
+        - SC-MANAGED-RESOURCE-001
+      task-planning:
+        - SC-MANAGED-RESOURCE-001
+      mock-acceptance:
+        - SC-MANAGED-RESOURCE-001
+      product-acceptance:
+        - SC-MANAGED-RESOURCE-001
+
+  operation-mutability:
+    patterns:
+      - update existing
+      - update an existing
+      - edit settings
+      - save config
+      - resize
+      - recreate
+      - migrate
+      - 修改配置
+      - 更新已有
+      - 编辑设置
+      - 保存配置
+      - 重建
+      - 迁移
+    ignore_if_excerpt_matches:
+      - '(?i)(?:not about|out of scope|does not involve|doesn''t involve|不涉及|无需).{0,32}(?:update|edit|save|resize|recreate|migrate|更新|编辑|保存|扩缩|重建|迁移)'
+    rules_by_stage:
+      prd:
+        - SC-OPERATION-MUTABILITY-001
+      aip:
+        - SC-OPERATION-MUTABILITY-001
+      design:
+        - SC-OPERATION-MUTABILITY-001
+      archaeology:
+        - SC-OPERATION-MUTABILITY-001
+      migration:
+        - SC-OPERATION-MUTABILITY-001
+      frontend-contract:
+        - SC-OPERATION-MUTABILITY-001
+      contract:
+        - SC-OPERATION-MUTABILITY-001
+      verification:
+        - SC-OPERATION-MUTABILITY-001
+      task-planning:
+        - SC-OPERATION-MUTABILITY-001
+      mock-acceptance:
+        - SC-OPERATION-MUTABILITY-001
+      product-acceptance:
+        - SC-OPERATION-MUTABILITY-001
+
+  external-side-effect:
+    patterns:
+      - provider API
+      - cloud API
+      - K8s API
+      - Kubernetes API
+      - external adapter
+      - cloud resource
+      - 云 API
+      - 云资源
+      - 外部依赖
+    rules_by_stage:
+      aip:
+        - SC-EXTERNAL-FACT-001
+        - SC-EXTERNAL-SIDE-EFFECT-001
+      readiness:
+        - SC-EXTERNAL-SIDE-EFFECT-001
+      design:
+        - SC-EXTERNAL-SIDE-EFFECT-001
+      contract:
+        - SC-EXTERNAL-SIDE-EFFECT-001
+      verification:
+        - SC-EXTERNAL-SIDE-EFFECT-001
+      task-planning:
+        - SC-EXTERNAL-SIDE-EFFECT-001
+      mock-acceptance:
+        - SC-EXTERNAL-SIDE-EFFECT-001
+      product-acceptance:
+        - SC-EXTERNAL-SIDE-EFFECT-001
+
+  runtime-mode-parity:
+    patterns:
+      - new mode
+      - deployment mode
+      - runtime mode
+      - compute mode
+      - storage mode
+      - network mode
+      - 新模式
+      - 部署模式
+      - 运行时模式
+      - 计算模式
+      - 存储模式
+      - 网络模式
+    rules_by_stage:
+      prd:
+        - SC-RUNTIME-PARITY-001
+      aip:
+        - SC-RUNTIME-PARITY-001
+      readiness:
+        - SC-RUNTIME-PARITY-001
+      design:
+        - SC-RUNTIME-PARITY-001
+      archaeology:
+        - SC-RUNTIME-PARITY-001
+      migration:
+        - SC-RUNTIME-PARITY-001
+      frontend-contract:
+        - SC-RUNTIME-PARITY-001
+      contract:
+        - SC-RUNTIME-PARITY-001
+      verification:
+        - SC-RUNTIME-PARITY-001
+      task-planning:
+        - SC-RUNTIME-PARITY-001
+      mock-acceptance:
+        - SC-RUNTIME-PARITY-001
+      product-acceptance:
+        - SC-RUNTIME-PARITY-001
+
+  mock-acceptance:
+    patterns:
+      - mock acceptance
+      - no-cloud
+      - acceptance runtime
+      - playground
+      - 不上云
+      - 模拟验收
+      - 验收运行时
+    rules_by_stage:
+      contract:
+        - SC-MOCK-BOUNDARY-001
+      verification:
+        - SC-MOCK-BOUNDARY-001
+      task-planning:
+        - SC-MOCK-BOUNDARY-001
+      mock-acceptance:
+        - SC-MOCK-BOUNDARY-001
+        - SC-MOCK-BACKEND-001
+        - SC-MOCK-FRONTEND-001
+        - SC-RUNTIME-FRESHNESS-001
+      product-acceptance:
+        - SC-MOCK-BOUNDARY-001
+
+stages:
+  source-intake:
+    always:
+      - SC-WORKDIR-001
+      - SC-SOURCE-001
+      - SC-AUTH-001
+  prd:
+    always:
+      - SC-CURRENT-STATE-001
+      - SC-PRD-SEMANTICS-001
+      - SC-SURFACE-001
+      - SC-HUMAN-DECISION-001
+  aip:
+    always:
+      - SC-AIP-MECHANISM-001
+      - SC-EXTERNAL-FACT-001
+      - SC-HUMAN-DECISION-001
+  readiness:
+    always:
+      - SC-READINESS-001
+      - SC-HUMAN-DECISION-001
+  design:
+    context_requirements:
+      - id: CTX-DESIGN-001
+        description: PRD/AIP 到设计阶段的上下文恢复包
+        any_of:
+          - path: design-context-pack.md
+          - path: plan.md
+            heading: Design Context Rehydration
+    always:
+      - SC-MODULE-BOUNDARY-001
+  archaeology:
+    context_requirements:
+      - id: CTX-DESIGN-001
+        description: PRD/AIP 到考古阶段的上下文恢复包
+        any_of:
+          - path: design-context-pack.md
+          - path: plan.md
+            heading: Design Context Rehydration
+    always:
+      - SC-ARCHAEOLOGY-001
+  migration:
+    always:
+      - SC-MIGRATION-001
+  frontend-contract:
+    context_requirements:
+      - id: CTX-CONTRACT-001
+        description: archaeology/design 到前端契约阶段的上下文恢复包
+        any_of:
+          - path: contract-context-pack.md
+          - path: plan.md
+            heading: Contract Context Rehydration
+    always:
+      - SC-FRONTEND-ACTION-001
+  contract:
+    context_requirements:
+      - id: CTX-CONTRACT-001
+        description: archaeology/design 到跨模块契约阶段的上下文恢复包
+        any_of:
+          - path: contract-context-pack.md
+          - path: plan.md
+            heading: Contract Context Rehydration
+    always:
+      - SC-CONTRACT-OWNER-001
+      - SC-CONTRACT-SEMANTICS-001
+  verification:
+    always:
+      - SC-VERIFICATION-COVERAGE-001
+      - SC-VERIFICATION-FEASIBILITY-001
+  task-planning:
+    context_requirements:
+      - id: CTX-ATOMIC-PLANNING-001
+        description: contract/verification 到任务规划阶段的上下文恢复包
+        any_of:
+          - path: atomic-planning-context-pack.md
+    always:
+      - SC-TASK-OWNER-SLICE-001
+      - SC-TASK-PACKET-001
+      - SC-TASK-DAG-001
+  mock-acceptance:
+    context_requirements:
+      - id: CTX-ACCEPTANCE-001
+        description: implementation 到 mock acceptance 的上下文恢复包
+        any_of:
+          - path: acceptance-context-pack.md
+          - path: mock-acceptance.md
+            heading: Acceptance Context Rehydration
+    always:
+      - SC-MOCK-BACKEND-001
+      - SC-MOCK-FRONTEND-001
+      - SC-RUNTIME-FRESHNESS-001
+  product-acceptance:
+    context_requirements:
+      - id: CTX-ACCEPTANCE-001
+        description: implementation 到 product acceptance 的上下文恢复包
+        any_of:
+          - path: acceptance-context-pack.md
+          - path: mock-acceptance.md
+            heading: Acceptance Context Rehydration
+    always:
+      - SC-PRODUCT-ACCEPTANCE-001

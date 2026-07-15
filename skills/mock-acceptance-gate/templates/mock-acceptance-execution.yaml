@@ -1,0 +1,60 @@
+schema_version: 1
+executions:
+  - owner_task: T007
+    target: backend
+    row_id: MB-001
+    result: passed
+    command: <backend mock acceptance command from the sealed matrix row>
+    command_exit_code: 0
+    executed_by: <test or script id>
+    assertion_refs:
+      - real controller/service/manager/task path executed
+      - authoritative state owner write succeeded
+      - detail/list/query read back the same created or changed id
+      - only cloud-api/k8s-api/kafka-instance-api/connect-rest-api adapters mocked
+      - expected state transition and response fields match the sealed matrix row
+    evidence_refs:
+      - acceptance/backend/MB-001.log
+    completed_at: "2026-06-01T00:00:00+08:00"
+  - owner_task: T008
+    target: frontend
+    row_id: MF-001
+    result: passed
+    command: <frontend action matrix command from the sealed row>
+    command_exit_code: 0
+    executed_by: <test or script id>
+    assertion_refs:
+      - DOM shows the ASG mode fields required by the sealed frontend action row
+      - network assertion proves HTTP method/path/body
+      - negative assertion proves K8s-only fields are absent and not submitted
+    evidence_refs:
+      - acceptance/frontend/MF-001.log
+    completed_at: "2026-06-01T00:00:00+08:00"
+  - owner_task: T009
+    target: packaged
+    case_id: MAC-001
+    result: passed
+    command: <packaged/runtime representative case command from the sealed row>
+    command_exit_code: 0
+    executed_by: <test or script id>
+    assertion_refs:
+      - packaged/runtime freshness and real route/controller routing proved; for automqbox/CMP Connect features this is packaged playground freshness
+      - browser click flow, network assertions, DOM assertions, API assertions, and negative assertions passed
+      - mutation flow wrote authoritative state and read back the same id through real detail/list/progress/event APIs
+      - fixture graph relationships matched the sealed case
+    evidence_refs:
+      - acceptance/packaged/MAC-001.trace.zip
+    completed_at: "2026-06-01T00:00:00+08:00"
+  - owner_task: T009
+    target: event-state
+    event_state_row_id: ME-001
+    result: passed
+    command: <event-state or packaged/runtime command from the sealed row>
+    command_exit_code: 0
+    executed_by: <test or script id>
+    assertion_refs:
+      - progress/event transition moved from expected from_state to to_state
+      - terminal flag and failure reason matched the sealed event-state row
+    evidence_refs:
+      - acceptance/event-state/ME-001.log
+    completed_at: "2026-06-01T00:00:00+08:00"

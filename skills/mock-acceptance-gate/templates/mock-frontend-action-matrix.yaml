@@ -1,0 +1,51 @@
+schema_version: 1
+# Generic frontend action mock acceptance matrix. Use repo-specific fields
+# only when the target repo defines its own acceptance runtime. For
+# automqbox/CMP Connect features, that runtime is packaged playground, so add
+# playground_* refs. For automqbox/CMP non-Connect features, leave them absent.
+actions:
+  - frontend_action_id: MFM-xxx-ASG-CREATE-SUBMIT
+    coverage_sets: [connect-create-main-path, provider-selector-state, mode-leakage-negative]
+    dimensions:
+      action: create-submit
+      deploymentMode: asg
+      capacityMode: autoscaling
+      selectorState: existing
+      negativeAssertion: no-inactive-mode-payload
+    contract_source: C-xxx / VER-xxx
+    route: /connect/clusters/create
+    component: frontend/cmp-app/src/pages/connect/clusters/create
+    user_action: Select ASG deployment, choose provider selector options, and submit create form.
+    api_client: frontend/cmp-app/src/service/interface/connect.ts#createConnectCluster
+    fixture_refs: [fixture-provider-main, fixture-connect-cluster-asg-running]
+    event_state_refs: [MES-xxx-CREATE-ASG-RUNNING]
+    repo_specific_acceptance_refs: []
+    # automqbox/CMP only:
+    # playground_external_dependency_refs: [EXT-001, EXT-002]
+    # playground_domain_fixture_refs: [PFG-001, PFG-002, PFG-004, PFG-007]
+    # playground_scenario_refs: [PSN-001]
+    browser_steps:
+      - render create route with fixture-backed API responses
+      - select deploymentMode=asg
+      - select VPC/Subnet/SecurityGroup/IAMRole/InstanceType options
+      - click Submit
+    network_assertions:
+      - POST /connect/clusters/check body includes deployment.type=asg
+      - POST /connect/clusters body includes workerSpec.asg.instanceType
+      - request body does not include inactive Kubernetes fields
+    dom_assertions:
+      - ASG selector controls are visible
+      - K8s namespace/serviceAccount controls are absent
+      - submit success or fieldized warning/error is visible
+    negative_assertions:
+      - no raw AWS ID text box is used in ordinary path
+      - no inactive K8s field is submitted
+      - no mock-only API route is called
+    command: pnpm --dir frontend/app test -- --run connect-cluster-create
+    evidence_refs:
+      - acceptance/frontend/MFM-xxx-ASG-CREATE-SUBMIT.log
+      - acceptance/frontend/MFM-xxx-ASG-CREATE-SUBMIT.har
+    expected_result: Frontend action builds the locked payload and renders mode-specific states before packaged/browser runtime.
+    proves: Fast frontend matrix covers user action, DOM, payload and negative mode leakage.
+    result: planned
+    blocks_acceptance: true

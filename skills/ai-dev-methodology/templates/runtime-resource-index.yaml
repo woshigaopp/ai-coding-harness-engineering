@@ -1,0 +1,36 @@
+schema_version: 1
+resources:
+  - templates/workflow-workdir.md
+  - templates/workflow-state.yaml
+  - templates/source-intake-ledger.md
+  - templates/code-scope-discovery.md
+  - templates/user-decision-interaction.md
+  - templates/stage-decision-document.md
+  - templates/decision-registry.md
+  - templates/engineering-propose-intake.md
+  - templates/external-capability-research.md
+  - templates/mechanism-design-model.md
+  - templates/decision-surface-discovery.md
+  - templates/semantic-consumption-matrix.md
+  - templates/cross-module-contract.md
+  - templates/traceability-matrix.md
+  - templates/verification-matrix.md
+  - templates/verification-feasibility.md
+  - templates/stateful-behavior-matrix.md
+  - templates/stateful-behavior-matrix.yaml
+  - templates/existing-object-action-consumer-graph.md
+  - templates/variant-impact-matrix.md
+  - templates/progress-change-producer-chain-matrix.md
+  - templates/external-side-effect-contract-matrix.md
+  - templates/runtime-materialization-parity.md
+  - templates/runtime-test-topology-matrix.md
+  - templates/version-branch-alignment.md
+  - templates/artifact-rubric-scorecard.md
+  - references/artifact-review-rubric.md
+  - references/golden-atomic-issue.md
+  - references/bad-atomic-issue.md
+  - templates/task-dag.yaml
+  - templates/semantic-objects.yaml
+  - templates/contracts.yaml
+  - templates/verification.yaml
+  - templates/backflow.yaml

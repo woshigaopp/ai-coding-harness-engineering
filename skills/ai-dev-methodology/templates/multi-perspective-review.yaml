@@ -1,0 +1,109 @@
+schema_version: 1
+
+# Stage-level synchronized multi-perspective review.
+# Copy this template to multi-perspective-reviews/<stage>.yaml.
+# This artifact records read-only reviewer findings and the main agent's
+# disposition. It does not replace canonical PRD/AIP/design/contract/task
+# artifacts and must not be used by a subagent to lock decisions or pass stages.
+
+review_scope:
+  change_dir: specs/changes/<change-id>
+  stage_under_review: "" # canonical stage id: prd | aip | readiness | design | archaeology | migration | frontend-contract | contract | verification | task-planning | pre-execution | mock-acceptance | product-acceptance
+  gate_name: ""
+  main_agent_owner: ""
+  reviewed_at: "YYYY-MM-DDTHH:MM:SSZ"
+  risk_level: medium # medium | high | critical
+  required_reviewer_count: 2
+  reviewer_count_rule: "" # e.g. "medium=2, high=3-4, critical<=5; task-local uses task-semantic-review.yaml"
+  synchronization_rule: "Main agent must wait for all required reviewer final findings before passing this gate or entering the next stage."
+  authority_rule: "Reviewers produce findings only. Main agent owns accepted/rejected/deferred/backflow disposition and all canonical artifact updates."
+
+frozen_input_packet:
+  stage_objective: ""
+  review_objective: ""
+  frozen_artifacts:
+    # - path: specs/changes/<change-id>/decision-surface-discovery.md
+    #   role: decision-surface-candidates
+    []
+  validator_outputs_reviewed: []
+  locked_upstream_facts:
+    # - id: DEC-001
+    #   summary: ""
+    []
+  reviewable_scope:
+    # - ""
+    []
+  non_reviewable_scope:
+    # - ""
+    []
+  decision_surface_inputs:
+    required_when_applicable: true
+    decision_surface_discovery_path: ""
+    generative_stress_tests_reviewed: false
+    surface_obligation_projection_reviewed: false
+    semantic_consumption_matrix_reviewed: false
+    notes: ""
+  context_rules:
+    - "Read only frozen artifacts and listed evidence paths, not chat history."
+    - "Do not modify files, sign receipts, lock DEC/C/VER/T, or decide ready/done/accepted."
+    - "Do not redesign product or architecture outside reviewable_scope."
+    - "Every blocker must cite concrete artifact path, row, section, command output, or code anchor."
+    - "Decision-surface review checks whether the main agent's stress tests and projection are sufficient; it does not replace those tests."
+
+reviewers:
+  # - reviewer_id: R-product-001
+  #   reviewer_type: readonly-subagent # readonly-subagent | read-only-subagent only; no main-local fallback
+  #   subagent_execution:
+  #     agent_id: "" # exact id returned by spawn_agent
+  #     agent_type: "" # reviewer role/type used for the spawned read-only reviewer
+  #     spawn_agent_evidence: "" # must mention actual spawn_agent call/result
+  #     wait_agent_evidence: "" # must mention wait_agent completion/final status
+  #     final_status: "" # completed only
+  #     final_message_digest: "" # lowercase SHA-256 of reviewer_output_source
+  #     close_agent_evidence: "" # close_agent result, or explicit reused-live reason
+  #     reviewer_output_source: "" # file inside this change dir containing the exact reviewer final output
+  #   perspective: product-semantics # product-semantics | architecture-owner | runtime-external-mechanism | legacy-invariant | compatibility | provider-consumer-owner | state-lifecycle-event | verification-acceptance | frontend-interaction | mock-runtime-proof
+  #   assigned_objective: ""
+  #   frozen_input_refs: []
+  #   forbidden_scope: []
+  #   status: completed # completed | missing | timed_out | superseded
+  []
+
+findings:
+  # - finding_id: MPR-001
+  #   reviewer_id: R-product-001
+  #   severity: blocker # blocker | major | minor | question
+  #   stage_under_review: ""
+  #   perspective: product-semantics
+  #   violated_rule: ""
+  #   evidence_paths:
+  #     - "specs/changes/<change-id>/decision-surface-discovery.md#Generative Surface Stress Tests"
+  #   missing_decision_or_contract: ""
+  #   why_current_artifact_is_insufficient: ""
+  #   suggested_backflow_stage: "" # source-intake | prd | aip | readiness | design | archaeology | migration | frontend-contract | contract | verification | task-planning | execution | mock-acceptance | product-acceptance | none
+  #   human_decision_required: false
+  #   proposed_next_action: ""
+  []
+
+main_agent_dispositions:
+  # - finding_id: MPR-001
+  #   disposition: accepted # accepted | rejected | deferred | backflow-created | superseded
+  #   disposition_reason: ""
+  #   counter_evidence_paths: [] # required when rejected
+  #   backflow_id: "" # required when backflow-created
+  #   affected_artifacts:
+  #     - ""
+  #   canonical_updates_completed: false
+  #   human_decision_prompt_required: false
+  #   human_decision_prompt_id: ""
+  []
+
+gate_result:
+  verdict: blocked # blocked | pass
+  blocking_findings_open: []
+  deferred_findings_with_owner: []
+  rejected_findings_with_evidence: []
+  backflows_created: []
+  canonical_artifacts_updated: []
+  validators_rerun: []
+  ready_for_next_stage: false

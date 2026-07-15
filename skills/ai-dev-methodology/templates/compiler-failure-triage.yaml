@@ -1,0 +1,52 @@
+schema_version: 1
+
+# Required whenever atomic_issue_compile.py reports task-planning errors and
+# the agent edits planning artifacts afterward. The purpose is to prevent the
+# bad path "compiler error -> add proof/files to the current packet -> sync
+# task-dag -> pass". Every compiler error must be classified before changing
+# atomic-issue-packets.yaml, task-dag.yaml, contracts.yaml, verification.yaml,
+# or compiled atomic-issues.
+
+triage_scope:
+  change_dir: specs/changes/<change-id>
+  compiler_command: "python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/atomic_issue_compile.py --check specs/changes/<change-id>"
+  compiler_run_at: "YYYY-MM-DDTHH:MM:SSZ"
+  source_of_errors: "verbatim compiler output path or pasted summary"
+  triage_author: main-agent
+  no_packet_edits_before_triage: true
+
+rows:
+  # - id: CFG-001
+  #   task: T001
+  #   compiler_error: "Exact atomic_issue_compile.py error text"
+  #   error_kind: missing-owner-proof # missing-owner-proof | allowlist-feasibility | brief-overflow | source-context | carrier-materialization | owner-boundary | schema
+  #   owner_decision: current-task-owner # current-task-owner | move-to-existing-owner | split-new-task | upstream-backflow | validator-gap-blocked
+  #   true_owner_task: T001
+  #   true_owner_reason: "Why this task really owns the layer/resource/action/state. Must cite atomic-task-decomposition.md, contracts.yaml, or decision-surface-discovery.md."
+  #   allowed_fix: "Concrete permitted edit after triage."
+  #   prohibited_fix: "Do not expand files_to_change, do not add cross-layer proof, do not sync task-dag from packet, etc."
+  #   files_to_change_delta:
+  #     added: []
+  #     removed: []
+  #     unchanged_reason: ""
+  #   task_split_or_move:
+  #     new_task_id: ""
+  #     moved_to_existing_task: ""
+  #     backflow_id: ""
+  #     updated_dag_edges: []
+  #   downstream_artifacts_to_update:
+  #     - atomic-issue-packets.yaml
+  #     - task-dag.yaml
+  #   verification_after_fix:
+  #     - atomic_issue_compile.py --check
+  #     - validate_artifacts.py --stage task-planning
+  #     - workflowctl.py validate task-planning
+  []
+
+summary:
+  current_task_owner_fixes: 0
+  moved_to_existing_owner: 0
+  split_new_task: 0
+  upstream_backflow: 0
+  validator_gap_blocked: 0
+  reviewer_notes: ""

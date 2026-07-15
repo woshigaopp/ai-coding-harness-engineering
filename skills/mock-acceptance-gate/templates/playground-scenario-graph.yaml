@@ -1,0 +1,147 @@
+schema_version: 1
+scope: automqbox-cmp-connect-playground
+scenarios:
+  - scenario_id: PSN-001
+    user_goal: User completes ASG ConnectCluster lifecycle in playground and verifies downstream Connector/runtime/observability behavior through production paths without physical cloud deployment.
+    contract_source: REQ-xxx / C-xxx / VER-xxx
+    start_state: provider and Kafka instance fixtures available
+    end_state: cluster and connector lifecycle paths are coherent across list, detail, progress/change, events, tasks/workers, metrics, logs, update/resize, and delete.
+    real_code_under_test:
+      frontend: frontend/cmp-app/src/pages/connect
+      api_client: frontend/cmp-app/src/service/interface/connect.ts
+      controllers:
+        - cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ConnectClusterController.java
+        - cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ConnectorController.java
+        - cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ProviderController.java
+      services_or_domain:
+        - cmp/cmp-service ConnectClusterService/ConnectorService contracts
+        - backend/common ConnectCluster/Connector DTO/VO contracts
+    forbidden_mocked_layers:
+      - frontend component
+      - API client
+      - controller
+      - DTO/request/response schema
+      - service/domain logic
+    mocked_external_dependency_refs: [EXT-001, EXT-002, EXT-003, EXT-004]
+    fixture_refs: [PFG-001, PFG-002, PFG-003, PFG-004, PFG-005, PFG-006, PFG-007, PFG-008, PFG-009, PFG-010]
+    backend_matrix_refs:
+      - MBM-xxx-PROVIDER-SELECTORS
+      - MBM-xxx-CONNECT-CLUSTER-CREATE
+      - MBM-xxx-PROGRESS
+      - MBM-xxx-CONNECTOR-DOWNSTREAM
+      - MBM-xxx-RUNTIME-TASKS
+      - MBM-xxx-EVENTS
+      - MBM-xxx-METRICS
+      - MBM-xxx-LOGS
+    frontend_action_refs:
+      - MFM-xxx-ASG-SELECTORS
+      - MFM-xxx-ASG-CREATE-SUBMIT
+      - MFM-xxx-PROGRESS
+      - MFM-xxx-DETAIL-MODE-FIELDS
+      - MFM-xxx-CONNECTOR-DOWNSTREAM
+      - MFM-xxx-CONNECTOR-TASKS
+      - MFM-xxx-EVENTS
+      - MFM-xxx-METRICS
+      - MFM-xxx-LOGS
+    packaged_case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    event_progress_refs: [MES-xxx-CREATE-SUBMITTED, MES-xxx-CREATE-SUCCESS, MES-xxx-AUTOSCALING-DECISION]
+    ordered_steps:
+      - step_id: PSN-001-S01
+        action: open create page
+        frontend_route: /connect/clusters/create
+        api_routes:
+          - GET provider selector APIs
+        fixture_refs: [PFG-001, PFG-002]
+        expected_state: ASG and K8s mode controls render only their own active fields.
+      - step_id: PSN-001-S02
+        action: select ASG provider resources and capacity
+        frontend_route: /connect/clusters/create
+        api_routes:
+          - GET VPC/Subnet/SecurityGroup/IAM/InstanceType selector APIs
+        fixture_refs: [PFG-001]
+        expected_state: Parent reset clears child selectors; no raw AWS ID textbox is used on the ordinary path.
+      - step_id: PSN-001-S03
+        action: submit create check and create
+        frontend_route: /connect/clusters/create
+        api_routes:
+          - POST /connect/clusters/check
+          - POST /connect/clusters
+        fixture_refs: [PFG-001, PFG-002, PFG-004, PFG-007]
+        expected_state: Request contains ASG fields and excludes Kubernetes namespace/serviceAccount/scheduling fields.
+      - step_id: PSN-001-S04
+        action: follow progress and change
+        frontend_route: /connect/change-progress
+        api_routes:
+          - GET /connect/clusters/{id}/last-change
+          - GET /connect/clusters/{id}/changes/{changeId}
+        fixture_refs: [PFG-004, PFG-007, PFG-008]
+        expected_state: Progress reaches terminal or in-progress state tied to created cluster; event records are visible.
+      - step_id: PSN-001-S05
+        action: open cluster detail and verify mode-specific actions
+        frontend_route: /connect/clusters/{id}
+        api_routes:
+          - GET /connect/clusters/{id}
+          - GET /connect/clusters/{id}/workers
+        fixture_refs: [PFG-003, PFG-004, PFG-008]
+        expected_state: ASG detail shows ASG deployment/capacity/spec and action menu routes to ASG-compatible update/resize pages; K8s-only fields are absent.
+      - step_id: PSN-001-S06
+        action: create and inspect connector on created cluster
+        frontend_route: /connect/connectors/create
+        api_routes:
+          - POST /connect/connectors/check
+          - POST /connect/connectors
+          - GET /connect/connectors/{id}
+          - GET /connect/connectors/{id}/tasks
+          - GET /connect/connectors/{id}/workers
+        fixture_refs: [PFG-003, PFG-004, PFG-005, PFG-006, PFG-007]
+        expected_state: Connector is tied to created cluster, tasks/workers are derived from runtime fixture graph, and progress/change is coherent.
+      - step_id: PSN-001-S07
+        action: open metrics and logs
+        frontend_route: /connect
+        api_routes:
+          - GET /connect/clusters/{id}/metrics
+          - GET /connect/clusters/{id}/logs
+          - GET /connect/connectors/{id}/metrics
+          - GET /connect/connectors/{id}/logs
+        fixture_refs: [PFG-009, PFG-010]
+        expected_state: Metrics/log tabs render available, empty, error, and unavailable branches according to matrix rows.
+      - step_id: PSN-001-S08
+        action: update/resize and delete
+        frontend_route: /connect/clusters/{id}
+        api_routes:
+          - PUT /connect/clusters/{id}
+          - DELETE /connect/clusters/{id}
+          - PUT /connect/connectors/{id}
+          - DELETE /connect/connectors/{id}
+        fixture_refs: [PFG-004, PFG-005, PFG-007, PFG-008]
+        expected_state: Update/resize/delete preserve mode-specific route/API/feedback and produce coherent progress/change/event states.
+    negative_assertions:
+      - ASG detail does not show K8s namespace/serviceAccount/scheduling-only fields.
+      - ASG action menu does not navigate to a K8s-only update-config route.
+      - K8s deployment mode does not render ASG-only infrastructure selectors.
+      - Inactive mode fields are absent from DOM and are not submitted in payload.
+      - No mock-only endpoint is called.
+      - No real cloud/K8s/kafka instance/Connect worker call is observed outside no-cloud adapters.
+    playground_capability_requirements:
+      - Seeded SQLite/no-cloud graph or real product persistence must persist every id needed by downstream pages.
+      - Provider fixtures must drive selector options and create/check validation.
+      - No-cloud external adapters must drive workers, tasks, metrics, logs, progress/change, and events through real product code.
+      - If the current runtime module cannot support a required edge, add or update playground code and keep the scenario blocked until verified.
+    evidence_refs:
+      - acceptance/cmp-playground-contract-audit.md
+      - acceptance/cmp-playground-audit.json
+      - acceptance/browser/MAC-xxx-ASG-CREATE-LIFECYCLE.trace.zip
+      - acceptance/network/MAC-xxx-ASG-CREATE-LIFECYCLE.har
+      - acceptance/screenshots/MAC-xxx-ASG-CREATE-LIFECYCLE.png
+    result: planned
+    command: pnpm --dir frontend/app test -- connect-playground-scenario.spec.ts
+    expected_result: Full no-cloud semantic scenario passes with real frontend/API/controller/service paths and only external dependencies mocked.
+    proves: Playground can substitute for real cloud acceptance for the locked product semantics without bypassing product logic.
+    blocks_acceptance: true
+
+scenario_backflow_rules:
+  - rule_id: PSB-001
+    trigger: Any ordered step lacks fixture data, backend/frontend matrix refs, real route/API evidence, or downstream state.
+    backflow_target: earliest missing artifact or atomic issue owner
+    required_action: Create or update requirements/contracts/tasks/runtime module code; do not mark packaged playground accepted.
+    blocks_acceptance: true

@@ -1,0 +1,199 @@
+schema_version: 1
+scope: automqbox-cmp-connect-playground
+fixtures:
+  - fixture_id: PFG-001
+    type: provider-resource
+    state: ready
+    contract_source: EXT-001 / provider selector contract
+    provides:
+      - AWS provider profile, region, VPC, zones, subnets, security groups, IAM roles, and instance types.
+    parents: []
+    children: [PFG-002, PFG-003, PFG-004]
+    external_dependency_refs: [EXT-001]
+    api_consumers:
+      - GET provider VPC/Subnet/SecurityGroup/IAM/InstanceType routes through real API client and ProviderController.
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-PROVIDER-SELECTORS]
+    frontend_action_refs: [MFM-xxx-ASG-SELECTORS]
+    result: planned
+
+  - fixture_id: PFG-002
+    type: kafka-instance
+    state: running
+    contract_source: locked Instance/ConnectCluster contract
+    provides:
+      - Kafka instance id, provider, region, VPC, subnet, security group, endpoint, and capability fields consumed by Connect cluster create.
+    parents: [PFG-001]
+    children: [PFG-004, PFG-005]
+    external_dependency_refs: [EXT-001]
+    api_consumers:
+      - ConnectCluster create/check payload and detail response.
+      - Connector create payload.
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-CONNECT-CLUSTER-CREATE]
+    frontend_action_refs: [MFM-xxx-ASG-CREATE-SUBMIT]
+    result: planned
+
+  - fixture_id: PFG-003
+    type: worker
+    state: ready
+    contract_source: EXT-002 / Connect runtime worker contract
+    provides:
+      - Worker ids, worker status, Connect REST port 8083, worker count, and task capacity.
+    parents: [PFG-004]
+    children: [PFG-005, PFG-006]
+    external_dependency_refs: [EXT-002]
+    api_consumers:
+      - GET /connect/clusters/{id}/workers
+      - GET /connect/connectors/{id}/tasks
+      - GET /connect/connectors/{id}
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-RUNTIME-WORKERS]
+    frontend_action_refs: [MFM-xxx-DETAIL-WORKERS]
+    result: planned
+
+  - fixture_id: PFG-004
+    type: connect-cluster
+    state: running
+    contract_source: C-xxx / ConnectCluster API-domain contract
+    provides:
+      - ASG deployment mode, workerSpec.asg.instanceType, capacity, resolved compute, lifecycle state, progress id, and mode-specific detail fields.
+    parents: [PFG-001, PFG-002]
+    children: [PFG-003, PFG-005, PFG-007, PFG-008, PFG-009, PFG-010]
+    external_dependency_refs: [EXT-001, EXT-002]
+    api_consumers:
+      - POST /connect/clusters/check
+      - POST /connect/clusters
+      - GET /connect/clusters/{id}
+      - GET /connect/clusters/{id}/last-change
+      - PUT /connect/clusters/{id}
+      - DELETE /connect/clusters/{id}
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-CONNECT-CLUSTER-CREATE]
+    frontend_action_refs: [MFM-xxx-DETAIL-MODE-FIELDS]
+    result: planned
+
+  - fixture_id: PFG-005
+    type: connector
+    state: running
+    contract_source: C-xxx / Connector API-domain contract
+    provides:
+      - Connector id, connectClusterId, kafkaInstanceId, plugin/class/version, taskCount, runtime status, lifecycle state, and config.
+    parents: [PFG-002, PFG-003, PFG-004]
+    children: [PFG-006, PFG-007, PFG-009, PFG-010]
+    external_dependency_refs: [EXT-002]
+    api_consumers:
+      - POST /connect/connectors/check
+      - POST /connect/connectors
+      - GET /connect/connectors/{id}
+      - GET /connect/connectors/{id}/tasks
+      - GET /connect/connectors/{id}/metrics
+      - GET /connect/connectors/{id}/logs
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-CONNECTOR-DOWNSTREAM]
+    frontend_action_refs: [MFM-xxx-CONNECTOR-DOWNSTREAM]
+    result: planned
+
+  - fixture_id: PFG-006
+    type: connector-task
+    state: running
+    contract_source: EXT-002 / runtime task contract
+    provides:
+      - Task id, task state, worker assignment, failed/running counts, and taskCount consistency.
+    parents: [PFG-003, PFG-005]
+    children: [PFG-009, PFG-010]
+    external_dependency_refs: [EXT-002]
+    api_consumers:
+      - GET /connect/connectors/{id}/tasks
+      - Connector detail runtime snapshot
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-RUNTIME-TASKS]
+    frontend_action_refs: [MFM-xxx-CONNECTOR-TASKS]
+    result: planned
+
+  - fixture_id: PFG-007
+    type: change-progress
+    state: terminal-success
+    contract_source: C-xxx / progress and change event contract
+    provides:
+      - Change id, operation step sequence, progress percent, status, terminal state, error/warning reason, and polling behavior.
+    parents: [PFG-004, PFG-005]
+    children: [PFG-008]
+    external_dependency_refs: [EXT-002]
+    api_consumers:
+      - GET /connect/clusters/{id}/last-change
+      - GET /connect/clusters/{id}/changes/{changeId}
+      - GET /connect/connectors/{id}/last-change
+      - GET /connect/connectors/{id}/changes/{changeId}
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-PROGRESS]
+    frontend_action_refs: [MFM-xxx-PROGRESS]
+    result: planned
+
+  - fixture_id: PFG-008
+    type: event
+    state: visible
+    contract_source: C-xxx / event and autoscaling decision contract
+    provides:
+      - User-visible event records, operation names, scaling decision reason/current/target/status, and failure/stopped reason.
+    parents: [PFG-004, PFG-007]
+    children: []
+    external_dependency_refs: [EXT-002]
+    api_consumers:
+      - detail events panel
+      - progress/change page
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-EVENTS]
+    frontend_action_refs: [MFM-xxx-EVENTS]
+    result: planned
+
+  - fixture_id: PFG-009
+    type: metrics
+    state: available
+    contract_source: EXT-003 / metrics contract
+    provides:
+      - Cluster and connector metric series, zero/empty/query-error/unavailable variants, and rendered chart data.
+    parents: [PFG-004, PFG-005, PFG-006]
+    children: []
+    external_dependency_refs: [EXT-003]
+    api_consumers:
+      - GET /connect/clusters/{id}/metrics
+      - GET /connect/connectors/{id}/metrics
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-METRICS]
+    frontend_action_refs: [MFM-xxx-METRICS]
+    result: planned
+
+  - fixture_id: PFG-010
+    type: logs
+    state: available
+    contract_source: EXT-004 / log contract
+    provides:
+      - Cluster and connector logs, filters, pagination/truncation, empty/unavailable states, and worker/pod display fields.
+    parents: [PFG-004, PFG-005, PFG-006]
+    children: []
+    external_dependency_refs: [EXT-004]
+    api_consumers:
+      - GET /connect/clusters/{id}/logs
+      - GET /connect/connectors/{id}/logs
+    scenario_refs: [PSN-001]
+    case_refs: [MAC-xxx-ASG-CREATE-LIFECYCLE]
+    backend_matrix_refs: [MBM-xxx-LOGS]
+    frontend_action_refs: [MFM-xxx-LOGS]
+    result: planned
+
+required_graph_closure:
+  - closure_id: PGC-001
+    description: ASG ConnectCluster create must continue into detail, progress/change, events, connector create/detail, tasks/workers, metrics, logs, update/resize, and delete unless a locked N/A decision removes a branch.
+    scenario_refs: [PSN-001]
+    fixture_refs: [PFG-001, PFG-002, PFG-003, PFG-004, PFG-005, PFG-006, PFG-007, PFG-008, PFG-009, PFG-010]
+    blocks_acceptance: true

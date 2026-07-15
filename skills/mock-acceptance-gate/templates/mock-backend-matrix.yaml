@@ -1,0 +1,72 @@
+schema_version: 1
+# Generic backend mock acceptance matrix. Use repo-specific fields only
+# when the target repo defines its own acceptance runtime. For automqbox/CMP
+# Connect features, that runtime is packaged playground, so add playground_* refs
+# and concrete cmp-playground no-cloud adapter paths. For automqbox/CMP
+# non-Connect features, leave playground_* absent.
+backend_rows:
+  - backend_row_id: MBM-xxx-CREATE-ASG-AUTOSCALING
+    coverage_sets: [connect-create-main-path, provider-selector-state]
+    dimensions:
+      action: create-submit
+      deploymentMode: asg
+      capacityMode: autoscaling
+      selectorState: existing
+    contract_source: C-xxx / VER-xxx
+    action: create-check-submit
+    method: POST
+    path: /connect/clusters
+    request_shape:
+      deployment.type: asg
+      capacity.type: autoscaling
+      workerSpec.asg.instanceType: r6in.large
+    real_code_under_test:
+      controller: cmp/cmp-cmp-app/src/main/java/com/automq/cmp/controller/ConnectClusterController.java#createConnectCluster
+      service: cmp/cmp-service/src/main/java/com/automq/cmp/service/impl/ConnectClusterServiceImpl.java#create
+      manager_or_task: backend/runtime-manager real Connect task path
+      repository_or_schema: backend/repository real DAO/MyBatis mapper plus current migration/schema for persisted ConnectCluster state
+    state_owner:
+      persistence: authoritative product persistence row/table or repository state mutated by this action
+      runtime: authoritative external/resource/runtime graph state mutated by this action when applicable
+    schema_resource_compatibility:
+      old_required_constraints:
+        - old-mode field/resource that used to be required
+      new_mode_rule:
+        - nullable/defaulted/derived/forbidden/retired/compat-placeholder rule for the current mode
+      owning_contract: C-xxx
+    external_adapters:
+      cloud_api: path/to/repo/no-cloud-or-mock-cloud-adapter
+      k8s_api: path/to/repo/no-cloud-or-mock-k8s-adapter
+      connect_rest_api: path/to/repo/no-cloud-or-mock-connect-rest-adapter
+      kafka_instance_api: path/to/repo/no-cloud-or-mock-kafka-instance-adapter
+    mocked_external_dependencies: [cloud-api, k8s-api, kafka-instance-api, connect-rest-api]
+    fixture_refs: [fixture-provider-main, fixture-connect-cluster-asg-running]
+    event_state_refs: [MES-xxx-CREATE-ASG-RUNNING]
+    repo_specific_acceptance_refs: []
+    # automqbox/CMP only:
+    # playground_external_dependency_refs: [EXT-001, EXT-002]
+    # playground_domain_fixture_refs: [PFG-001, PFG-002, PFG-004, PFG-007]
+    # playground_scenario_refs: [PSN-001]
+    assertions:
+      - request uses deployment/capacity/workerSpec main path
+      - response detail contains deployment.type=asg
+      - list/detail/last-change agree on cluster id and status
+      - no real cloud/K8s/kafka instance/Connect worker call is observed outside no-cloud adapters
+    persistence_assertions:
+      - real repository/DAO/resource writer accepts the mode-specific payload
+      - schema/nullability/compatibility constraints do not reject fields that are legitimately absent for this mode
+      - authoritative persisted/resource state contains the created or changed id
+      - old-mode required constraints are either satisfied, nullable, derived, defaulted, forbidden, retired, or covered by a locked compatibility placeholder
+    readback_assertions:
+      - detail/list/query reads back the same id and mode-specific fields
+      - downstream progress/change/event state is tied to the same id when applicable
+    state_assertions:
+      - create writes progress/change state for the created cluster
+      - workers/metrics/logs fixtures are available for the created cluster
+    command: <backend mock acceptance command for this repo>
+    evidence_refs:
+      - acceptance/backend/MBM-xxx-CREATE-ASG-AUTOSCALING.log
+    expected_result: Real ConnectCluster controller/service/task path consumes no-cloud external adapters without starting packaged/browser runtime.
+    proves: Fast backend matrix covers real business path plus external-only simulation before packaged browser acceptance.
+    result: planned
+    blocks_acceptance: true

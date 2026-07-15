@@ -1,0 +1,35 @@
+schema_version: 1
+fixtures:
+  - fixture_id: fixture-provider-main
+    type: provider-selector
+    contract_source: C-xxx provider selector contract
+    provides:
+      - provider=aws
+      - region=us-east-1
+      - VPC/Subnet/SecurityGroup/IAMRole/InstanceType options
+      - loading/empty/error/invalid states as separate fixture ids when required
+    consumed_by:
+      - MAC-xxx-ASG-CREATE
+    parent_refs: []
+    downstream_refs:
+      - fixture-connect-cluster-asg-running
+    states: [default, existing]
+
+  - fixture_id: fixture-connect-cluster-asg-running
+    type: connect-cluster
+    contract_source: C-xxx ConnectCluster API/detail/progress contract
+    provides:
+      - deploymentMode=asg
+      - capacityMode=autoscaling
+      - workerSpec.asg.instanceType
+      - workers/metrics/logs/events
+      - lastChange/progress terminal state
+    consumed_by:
+      - MAC-xxx-DETAIL
+      - MAC-xxx-WORKERS
+      - MAC-xxx-METRICS
+      - MAC-xxx-LOGS
+    parent_refs:
+      - fixture-provider-main
+    downstream_refs: []
+    states: [running, terminal]

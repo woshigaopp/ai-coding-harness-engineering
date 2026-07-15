@@ -1,0 +1,89 @@
+schema_version: 1
+stage: task-planning
+purpose: >
+  Record every task-planning compiler/review failure that required generator,
+  owner-model, task split, carrier projection, or wording repair, then keep a
+  regression check so the same failure signature cannot silently reappear after
+  regeneration.
+
+ledger_scope:
+  change_id: "<change-id>"
+  generator_entrypoint: "specs/changes/<change-id>/rebuild_task_planning.py"
+  canonical_artifacts:
+    - task-dag.yaml
+    - atomic-issue-packets.yaml
+    - atomic-task-decomposition.md
+    - tasks.md
+    - atomic-issues/Txxx.md
+  rule: >
+    Fixed signatures are hard invariants. After every task-planning regeneration
+    and before compiler/review/gate pass, run every active regression check.
+    If a fixed signature reappears, stop local text scrubbing and repair the
+    generator owner model, task split, or carrier projection.
+
+repair_iterations:
+  - iteration_id: "TPR-001"
+    started_at: "<ISO-8601>"
+    trigger_source: "compiler | readonly-review | workflowctl | human-review"
+    trigger_command_or_review: "<command or reviewer id>"
+    failure_signature: "Txxx-short-stable-signature"
+    affected_tasks:
+      - "Txxx"
+    failure_class: "owner-boundary-leakage | stale-regeneration | keyword-misclassification | task-split-gap | carrier-projection-gap | review-evidence-gap"
+    root_cause: "<why the generator/model produced the bad task>"
+    owner_invariant: "<the stable owner boundary that must remain true>"
+    generator_rules_changed:
+      - "<function/table/rule changed, or locked N/A with evidence>"
+    forbidden_regression:
+      - "<condition that must not reappear after this fix>"
+    regression_checks:
+      - check_id: "REG-001"
+        command: "<exact command, rg/python/compiler/workflowctl>"
+        expected_result: "<zero matches / specific pass output / exact owner row>"
+        last_result: "<actual latest output summary>"
+    status: "open | fixed | superseded"
+    fixed_at: "<ISO-8601 or empty>"
+    verifier: "main-agent"
+    notes: "<optional>"
+
+known_regressions:
+  - signature: "T002-managed-resource-owner-leak"
+    owner_invariant: "T002 owns only persistence/readback metadata shape, not provider lifecycle."
+    must_not_reappear_in:
+      - "atomic-issue-packets.yaml:packets.T002"
+      - "atomic-issues/T002.md"
+      - "task-dag.yaml:T002"
+    regression_check_command: "python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/atomic_issue_compile.py specs/changes/<change-id> && <project-specific T002 grep/assertion>"
+    status: "example"
+  - signature: "frontend-consumer-copied-to-stateful-owner-leak"
+    owner_invariant: "Frontend/consumer tasks may display or consume state visibility, but only the provider task owns backend lifecycle/stateful implementation."
+    must_not_reappear_in:
+      - "atomic-issue-packets.yaml:frontend packets semantic_carriers.copied_to"
+      - "atomic-issues/Txxx.md frontend issues"
+      - "task-dag.yaml frontend task semantic carriers"
+    regression_check_command: "<project-specific assertion: frontend packets must not copy provider stateful_behavior unless they own the frontend-only DOM/display state; provider lifecycle carrier remains on provider Txxx>"
+    status: "example"
+  - signature: "automatic-fallback-projection-dense-carrier-leak"
+    owner_invariant: "Only explicit SCP/owner slices become dense semantic carriers; automatic fallback traceability must not force every consumer to materialize global REQ/SCN semantics."
+    must_not_reappear_in:
+      - "semantic-objects.yaml:semantic_carriers"
+      - "atomic-issue-packets.yaml:packets.*.semantic_carriers"
+      - "atomic-issues/Txxx.md Source Context / execution sections"
+    regression_check_command: "<project-specific assertion: fallback/traceability projections are traceability-only or explicitly marked non-dense; packet dense carriers all reference explicit owner slices>"
+    status: "example"
+  - signature: "frontend-form-matrix-ownerless-row-filtered"
+    owner_invariant: "If frontend-form-state-matrix.md has no concrete Owner issue column, rows must be copied to the applicable frontend owner packet by form/surface matching or all-frontend fallback; rows must not disappear."
+    must_not_reappear_in:
+      - "frontend-form-state-matrix.md"
+      - "atomic-issue-packets.yaml:frontend packets form_state_matrix"
+      - "atomic-issues/Txxx.md frontend form/state sections"
+    regression_check_command: "<project-specific assertion: every form row's form/active fields/inactive fields/validation trigger/submit participation appears in at least one applicable frontend packet form_state_matrix>"
+    status: "example"
+  - signature: "consumer-visibility-provider-state-machine-mixup"
+    owner_invariant: "Consumer tasks may carry state visibility/assumption assertions and negative leakage proof, but provider state machine operation/from-to/guard/write/readback implementation stays on provider owner tasks."
+    must_not_reappear_in:
+      - "contracts.yaml consumer/proof rows"
+      - "atomic-issue-packets.yaml consumer packets"
+      - "atomic-issues/Txxx.md consumer issues"
+    regression_check_command: "<project-specific assertion: consumer packets use consumer visibility/assumption language and do not require provider state machine implementation steps; provider packets own operation/from-to/guard/write/readback>"
+    status: "example"

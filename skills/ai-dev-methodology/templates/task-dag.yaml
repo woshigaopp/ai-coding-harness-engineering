@@ -1,0 +1,57 @@
+schema_version: 1
+
+tasks:
+  # T001:
+  #   title: ""
+  #   primary_module: ""
+  #   layer: backend-service
+  #   status: pending
+  #   sources: [REQ-001]
+  #   decisions: [DEC-001]
+  #   consumes: []
+  #   provides: [C-001]
+  #   # provides is only for semantic provider ownership. Coarse C-xxx may be
+  #   # listed only when every semantic_contract_edge obligation for that C is
+  #   # owned by this same task and also listed in provides_obligations.
+  #   # Carrier/proof/prerequisite rows must not appear in provides.
+  #   provides_obligations: [C-001-OBL-001]
+  #   # provides_obligations accepts only owner-single semantic_contract_edge
+  #   # rows. Do not list carrier_order_edge, verification_prerequisite_edge,
+  #   # proof_only_edge, proof files, fixtures, or coarse C-xxx here.
+  #   semantic_carriers:
+  #     # Owner-specific projection IDs or concrete payload excerpts from
+  #     # semantic-objects/contracts. Dense REQ/SCN semantics must first be
+  #     # split into semantic_carrier_projections such as SCP-001. List the
+  #     # SCP rows owned by this task here; do not list a global REQ/SCN carrier
+  #     # that belongs to several modules.
+  #     # Each listed projection/carrier must be present in this task's
+  #     # atomic-issue-packets.yaml packet.
+  #     # Persistent mutation/schema compatibility carriers must name state
+  #     # owner, writer, old required constraint, new null/default/derived rule,
+  #     # and write/readback proof owner.
+  #     # Managed resource ownership carriers must name selection mode,
+  #     # provider writer, resource identity, owned/existing provenance,
+  #     # runtime consumer, cleanup/protect rule, idempotency/failure behavior,
+  #     # and provider/readback/cleanup proof owner.
+  #     - ""
+  #   verification: [VER-001]
+  #   files: []
+  #   issue: atomic-issues/T001.md
+  {}
+
+edges:
+  # - from: T001
+  #   to: T002
+  #   type: semantic_contract_edge / carrier_order_edge / verification_prerequisite_edge / proof_only_edge
+  #   reason: ""
+  #   failure_propagation: "T002 remains blocked if T001 fails"
+  []
+
+parallel_groups:
+  # - group: P1
+  #   tasks: [T001, T003]
+  #   disjoint_files: true
+  #   disjoint_contracts: true
+  #   shared_verification: false
+  #   risk: ""
+  []

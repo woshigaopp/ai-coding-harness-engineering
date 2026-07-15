@@ -1,0 +1,71 @@
+schema_version: 1
+
+# Planning-stage quality review for compiled Atomic Issues.
+# This is not task-local code review. It runs after atomic_issue_compile.py
+# succeeds and before workflowctl validate/pass-stage pre-execution. It checks
+# whether the generated issue itself became validator-driven, over-broad, or
+# assigned to the wrong owner.
+
+review_scope:
+  change_dir: specs/changes/<change-id>
+  reviewer_type: readonly-subagent # readonly-subagent | read-only-subagent only; no main-local fallback
+  reviewed_at: "YYYY-MM-DDTHH:MM:SSZ"
+  subagent_execution:
+    agent_id: "" # exact id returned by spawn_agent
+    agent_type: "" # reviewer role/type used for the spawned read-only reviewer
+    spawn_agent_evidence: "" # must mention the actual spawn_agent call/result, not just schema intent
+    wait_agent_evidence: "" # must mention wait_agent completion/final status
+    final_status: "" # completed only
+    final_message_digest: "" # lowercase SHA-256 of reviewer_output_source
+    close_agent_evidence: "" # close_agent result, or explicit reused-live reason
+    reviewer_output_source: "" # file inside this change dir containing the exact reviewer final output
+  validator_outputs_reviewed:
+    - atomic_issue_compile.py --check
+    - validate_artifacts.py --stage task-planning
+    - workflowctl.py validate task-planning
+  context_rules:
+    - "Read sealed planning artifacts and context packs, not chat history."
+    - "Treat proposal.md/spec.md as source IDs/background, not authority to redesign."
+    - "Review authority is plan.md, design/contract/atomic-planning context packs, contracts.yaml, verification.yaml, task-dag.yaml, atomic-task-decomposition.md, compiler-failure-triage.yaml, atomic-issue-packets.yaml, compiled atomic-issues, and existing frontend/backend/migration/runtime matrices."
+    - "Do not edit files, sign receipts, or decide product/architecture alternatives."
+    - "reviewer_type=readonly-subagent is not evidence by itself; this review is invalid unless subagent_execution records actual spawn_agent, wait_agent final status, and reviewer final output."
+    - "Atomicity must be judged by the methodology Atomic Boundary: zero decision, single-layer change, self-contained context, short verification loop, and no error propagation."
+    - "primary_closure/action-flow/stateful operation/provided contract/verification loop are split evidence only; they do not replace the five Atomic Boundary conditions."
+    - "If compiler-failure-triage.yaml exists, verify each compiler error was handled by current-task-owner, move-to-existing-owner, split-new-task, upstream-backflow, or validator-gap-blocked before packet/task-dag edits."
+    - "Reject compiler-driven owner expansion: do not pass tasks that added files_to_change, stateful/persistent/ownership proof, or task-dag edges only to satisfy compiler/validator output."
+  atomic_boundary_definition:
+    zero_decision: "Product, architecture, field, error, UI, and compatibility choices are locked; the worker makes no new decision."
+    single_layer_change: "The issue touches one fine layer or one locked intra-module contract closure; cross-layer work requires an inseparable contract/materialization proof."
+    self_contained_context: "The worker can execute using only atomic-issues/Txxx.md and the listed file paths; reading full proposal/spec/plan must not be required."
+    short_verification_loop: "A short command, browser check, integration proof, plan, render, or manual proof can verify the current closure immediately."
+    no_error_propagation: "If this task fails, it cannot pollute downstream inputs, shared state, sealed artifacts, or later task assumptions."
+    split_evidence_note: "primary_closure, user_action_flows, stateful_operations, provided_contracts, and verification_loops are auxiliary split evidence for the five conditions, not a replacement definition."
+
+reviews:
+  # - task: T001
+  #   issue_path: atomic-issues/T001.md
+  #   verdict: pass # pass | blocked
+  #   source_context_quality: pass # pass | blocked
+  #   no_validator_gaming: pass # pass | blocked
+  #   owner_boundary: pass # pass | blocked
+  #   atomicity: pass # pass | blocked
+  #   atomic_boundary_check:
+  #     zero_decision: pass # pass | blocked
+  #     single_layer_change: pass # pass | blocked
+  #     self_contained_context: pass # pass | blocked
+  #     short_verification_loop: pass # pass | blocked
+  #     no_error_propagation: pass # pass | blocked
+  #     split_evidence_used: "primary_closure/action-flow/stateful operation/provided contract/verification loop were used only as auxiliary split evidence."
+  #   brief_overflow_handling: pass # pass | blocked | not_applicable
+  #   frontend_backend_proof_boundary: pass # pass | blocked | not_applicable
+  #   compiler_failure_triage: pass # pass | blocked | not_applicable
+  #   required_backflow: ""
+  #   blocking_findings: []
+  #   evidence:
+  #     source_context: ""
+  #     execution_sections: ""
+  #     owner_boundary: ""
+  #     atomicity: ""
+  #     compiler_failure_triage: ""
+  #     validator_outputs: ""
+  []

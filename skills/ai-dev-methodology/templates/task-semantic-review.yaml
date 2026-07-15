@@ -1,0 +1,30 @@
+schema_version: 1
+reviews:
+  - task: Txxx
+    reviewer_type: readonly-subagent # readonly-subagent | read-only-subagent only; no main-local fallback
+    subagent_execution:
+      agent_id: "" # exact id returned by spawn_agent
+      agent_type: "" # reviewer role/type used for the spawned read-only reviewer
+      spawn_agent_evidence: "" # must mention actual spawn_agent call/result
+      wait_agent_evidence: "" # must mention wait_agent completion/final status
+      final_status: "" # completed only
+      final_message_digest: "" # lowercase SHA-256 of reviewer_output_source
+      close_agent_evidence: "" # close_agent result, or explicit reused-live reason
+      reviewer_output_source: "" # file inside this change dir containing the exact reviewer final output
+    reviewed_at: "YYYY-MM-DDTHH:MM:SSZ"
+    verdict: pass # pass | no-findings
+    checked_sections:
+      - "Txxx.md: Provided Contract Obligation"
+      - "Txxx.md: 行为细节 / Invariant Carryover"
+      - "Txxx.md: Mode Leakage Negative Assertions / 禁止事项"
+      - "Txxx.md: Verification expected result"
+      - "current diff under admitted file allowlist"
+      - "task-verification-log.yaml / execution-state.yaml"
+    issue_alignment: pass
+    contract_alignment: pass
+    verification_alignment: pass
+    diff_scope_alignment: pass
+    changed_path_hashes: {}
+    blocking_findings: []
+    non_blocking_findings: []
+    dispositions: []
