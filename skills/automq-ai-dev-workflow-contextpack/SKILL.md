@@ -110,8 +110,11 @@ source/trigger
 再把具体 artifact 路径、ID、断言和 consumer 写入 ledger 的 `closure`，运行：
 
 ```bash
+python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py preflight-stage-closures <stage> specs/changes/<change-id>
 python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py validate-obligation <stage> <obligation-id> specs/changes/<change-id>
 ```
+
+`preflight-stage-closures` 只读地扫描全部 closure 草稿并一次返回所有 construction errors；open row 会在内存中按待关闭状态检查，PRD/AIP 还会同时执行全局兼容校验。它不写 receipt，不能替代逐条 `validate-obligation`。
 
 canonical artifact 必须引用到最窄稳定 section，例如 `spec.md#用户可见状态`。typed obligation 的 receipt 只固定该 section 中包含自身 `object_id` 的结构化行；禁止用整个 dense Markdown 文件的 hash 让无关 row 一起 stale。
 

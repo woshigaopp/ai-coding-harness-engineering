@@ -429,7 +429,9 @@ Decision surface discovery 和 Generative Surface Stress Tests 是 review 的前
 
 阶段级 multi-perspective review 配置：
 
-是否需要 review、初审/修复轮最少人数和上限以 `workflow-state-machine.yaml#review_policy` 为唯一机器事实源。`source-intake` 不单独启动 subagent review，其 source/current-state 证据由 PRD/readiness reviewer 消费。`initial` 使用完整视角；`semantic-repair`、`projection-repair`、`format-repair` 只复审受影响视角，最少 1 人，不因 frozen hash 的机械变化自动召回全部 reviewer。修复轮必须在 `repair_context` 固定 immutable `previous_review_ref`、触发 finding/validator failures、实际变更 artifacts 和缩窄视角理由；缺任一项按 initial review 处理，不能只改 `review_kind` 绕过初审人数。
+是否需要 review、初审/修复轮最少人数和上限以 `workflow-state-machine.yaml#review_policy` 为唯一机器事实源。`source-intake` 不单独启动 subagent review，其 source/current-state 证据由 PRD/readiness reviewer 消费。`initial` 使用完整视角；`semantic-repair`、`projection-repair`、`format-repair` 只复审受影响视角，最少 1 人，不因 frozen hash 的机械变化自动召回全部 reviewer。修复轮必须在 `repair_context` 固定 immutable `previous_review_ref`，并把每个 triggering finding 结构化为 `finding_id/perspective/root_cause/canonical_owner/invariant/affected_artifacts/projection_targets/deterministic_proof/negative_assertion`。`required_reviewer_count`、实际 reviewer 行数和 reviewer perspective 集合必须精确等于 triggering findings 的唯一 perspective 集合；实际变更 artifacts 和缩窄理由也必须固定。缺任一闭环字段时不得进入 repair review。
+
+frozen packet 中的 stage artifact digest 统一使用 `workflowctl.artifact_receipt_digest`。它通常等于文件 SHA-256，但 `workflow-workdir.md` 会先去除 append-only `Resume Verification` 审计再计算 normalized identity digest；reviewer 不得把 receipt digest 强行解释为 raw file SHA-256 并制造虚假 freshness round。
 
 | Gate | Default reviewer count | Required reviewer perspectives | Frozen input focus | Blocking output |
 |---|---:|---|---|---|

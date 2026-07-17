@@ -23,7 +23,17 @@ review_scope:
 # rereview of a completed earlier review, not an initial-review bypass.
 repair_context:
   previous_review_ref: "" # immutable prior review artifact/event/receipt reference
-  triggering_findings: [] # exact finding IDs or validator failures being repaired
+  triggering_findings:
+    # - finding_id: MPR-001
+    #   perspective: product-semantics
+    #   root_cause: ""
+    #   canonical_owner: "" # one artifact/section that owns the repaired invariant
+    #   invariant: ""
+    #   affected_artifacts: []
+    #   projection_targets: [] # every artifact/row derived from the owner
+    #   deterministic_proof: "" # validator/preflight proving the closure before rereview
+    #   negative_assertion: "" # what must no longer remain after repair
+    []
   changed_artifacts: [] # canonical artifacts changed since the prior review
   narrowed_review_reason: "" # why one or more selected perspectives cover this repair
 
@@ -45,6 +55,10 @@ frozen_input_packet:
   non_reviewable_scope:
     # - ""
     []
+  digest_policy:
+    stage_artifact_digest: workflowctl.artifact_receipt_digest
+    workflow_workdir_policy: normalized-identity-before-resume-verification
+    treat_receipt_digest_as_raw_sha256: false
   decision_surface_inputs:
     required_when_applicable: true
     decision_surface_discovery_path: ""

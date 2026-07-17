@@ -359,8 +359,7 @@ DECISION_SURFACE_APPENDIX_ONLY_FIELDS = {
     "contract_excerpts",
 }
 OPEN_DECISION_SURFACE_RE = re.compile(
-    r"\b(?:needs-decision|open|unknown|todo|tbd|blocked|待确认|未知|未决|阻塞)\b",
-    re.IGNORECASE,
+    r"\b(?:needs-decision|open|unknown|todo|tbd|blocked|TBD|TODO|待确认|未知|未决|阻塞)\b",
 )
 ROUTED_DECISION_SURFACE_RE = re.compile(r"\brouted-to-[a-z-]+\b|\brouted\b|stage-owned", re.IGNORECASE)
 DECISION_SURFACE_LOCKED_NA_RE = re.compile(
@@ -389,12 +388,10 @@ EXTERNAL_CAPABILITY_SIGNAL_RE = re.compile(
     re.IGNORECASE,
 )
 EXTERNAL_RESEARCH_BLOCKED_RE = re.compile(
-    r"\b(?:unread|unknown-blocking|open|todo|tbd|待确认|未知|未读|阻塞|未决)\b|(?<![_-])\bblocked\b(?![_-])",
-    re.IGNORECASE,
+    r"\b(?:unread|unknown-blocking|open|todo|tbd|blocked|TBD|TODO|待确认|未知|未读|阻塞|未决)\b",
 )
 MECHANISM_UNRESOLVED_RE = re.compile(
-    r"\b(?:TBD|TODO|unknown|open|待确认|未知|未决|后续决定|task-planning|implementation)\b|(?<![_-])\bblocked\b(?![_-])",
-    re.IGNORECASE,
+    r"\b(?:TBD|TODO|tbd|todo|unknown|open|blocked|待确认|未知|未决|后续决定)\b",
 )
 EXTERNAL_FACT_ID_RE = re.compile(r"\b(?:FACT|EXT|CONSTRAINT|XCON)-\d{3}\b")
 MECHANISM_MODEL_ID_RE = re.compile(r"\b(?:MECH|OPSEQ|EXTAPI|EVT|RMM|RLM|FCM|MIM)-\d{3}\b")
@@ -6233,6 +6230,28 @@ def normalize_multi_perspective_stage(value: str) -> str:
     return MULTI_PERSPECTIVE_STAGE_ALIASES.get(normalized, normalized)
 
 
+def repair_triggering_finding_errors(value: object, label: str) -> tuple[list[str], set[str]]:
+    errors: list[str] = []
+    perspectives: set[str] = set()
+    rows = value if isinstance(value, list) else []
+    if not rows:
+        return [f"{label} must contain structured finding rows"], perspectives
+    for index, raw in enumerate(rows, 1):
+        row = raw if isinstance(raw, dict) else {}
+        row_label = f"{label}[{index}]"
+        for field in ["finding_id", "perspective", "root_cause", "canonical_owner", "invariant", "deterministic_proof", "negative_assertion"]:
+            if len(str(row.get(field, "")).strip()) < 4:
+                errors.append(f"{row_label}.{field} is required and must be concrete")
+        perspective = str(row.get("perspective", "")).strip()
+        if perspective:
+            perspectives.add(perspective)
+        for field in ["affected_artifacts", "projection_targets"]:
+            values = row.get(field)
+            if not isinstance(values, list) or not any(len(str(item).strip()) >= 4 for item in values):
+                errors.append(f"{row_label}.{field} must list concrete targets")
+    return errors, perspectives
+
+
 def validate_multi_perspective_review(change_dir: Path, stage: str) -> list[str]:
     errors: list[str] = []
     if stage not in MULTI_PERSPECTIVE_REVIEW_STAGES and stage != "all":
@@ -6286,10 +6305,11 @@ def validate_multi_perspective_review(change_dir: Path, stage: str) -> list[str]
         repair_context = doc.get("repair_context", {}) if isinstance(doc.get("repair_context"), dict) else {}
         if len(str(repair_context.get("previous_review_ref", "")).strip()) < 8:
             errors.append(f"{path}: repair_context.previous_review_ref is required for repair review")
-        triggering = [str(item).strip() for item in repair_context.get("triggering_findings", [])] if isinstance(repair_context.get("triggering_findings"), list) else []
         changed = [str(item).strip() for item in repair_context.get("changed_artifacts", [])] if isinstance(repair_context.get("changed_artifacts"), list) else []
-        if not any(len(item) >= 4 for item in triggering):
-            errors.append(f"{path}: repair_context.triggering_findings is required for repair review")
+        repair_errors, triggering_perspectives = repair_triggering_finding_errors(
+            repair_context.get("triggering_findings"), f"{path}: repair_context.triggering_findings"
+        )
+        errors.extend(repair_errors)
         if not any(len(item) >= 4 for item in changed):
             errors.append(f"{path}: repair_context.changed_artifacts is required for repair review")
         if len(str(repair_context.get("narrowed_review_reason", "")).strip()) < 12:
@@ -6304,6 +6324,13 @@ def validate_multi_perspective_review(change_dir: Path, stage: str) -> list[str]
     for field in ["reviewable_scope", "non_reviewable_scope"]:
         if not isinstance(packet.get(field), list) or not packet.get(field):
             errors.append(f"{path}: frozen_input_packet.{field} is required")
+    digest_policy = packet.get("digest_policy", {}) if isinstance(packet.get("digest_policy"), dict) else {}
+    if str(digest_policy.get("stage_artifact_digest", "")).strip() != "workflowctl.artifact_receipt_digest":
+        errors.append(f"{path}: frozen_input_packet.digest_policy.stage_artifact_digest must be workflowctl.artifact_receipt_digest")
+    if str(digest_policy.get("workflow_workdir_policy", "")).strip() != "normalized-identity-before-resume-verification":
+        errors.append(f"{path}: frozen_input_packet.digest_policy.workflow_workdir_policy must describe the normalized identity digest")
+    if digest_policy.get("treat_receipt_digest_as_raw_sha256") is not False:
+        errors.append(f"{path}: frozen_input_packet.digest_policy.treat_receipt_digest_as_raw_sha256 must be false")
 
     if scope_stage in {"prd", "readiness", "aip", "design", "contract", "verification", "task-planning", "pre-execution"}:
         ds_inputs = packet.get("decision_surface_inputs", {}) if isinstance(packet.get("decision_surface_inputs"), dict) else {}
@@ -6360,6 +6387,13 @@ def validate_multi_perspective_review(change_dir: Path, stage: str) -> list[str]
         errors.append(f"{path}: completed reviewer count {completed_count} is less than required_reviewer_count {required_count}")
     if required_count >= 2 and len(perspectives) < 2:
         errors.append(f"{path}: stage-level review needs at least two distinct reviewer perspectives")
+    if review_kind != "initial":
+        if len(reviewers) != required_count:
+            errors.append(f"{path}: repair reviewers count must exactly equal required_reviewer_count")
+        if required_count != len(triggering_perspectives):
+            errors.append(f"{path}: repair required_reviewer_count must equal unique triggering finding perspectives")
+        if perspectives != triggering_perspectives:
+            errors.append(f"{path}: repair reviewer perspectives must exactly match triggering finding perspectives")
 
     findings = doc.get("findings") if isinstance(doc.get("findings"), list) else []
     finding_ids: set[str] = set()
