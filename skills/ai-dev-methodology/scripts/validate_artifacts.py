@@ -1940,6 +1940,51 @@ def primary_mechanism_model_row_id(row: dict[str, str]) -> str:
     return ""
 
 
+CANONICAL_MECHANISM_MODEL_ROW_SCHEMAS = [
+    ("Sequence row", "OPSEQ", ("Ordered production steps", "External calls/resources")),
+    ("Parameter row", "EXTAPI", ("External system/API/resource", "Parameter / option")),
+    ("Event row", "EVT", ("Event / step", "State owner")),
+    ("Runtime row", "RMM", ("Mode / runtime", "New mode materialization design")),
+    ("Resource row", "RLM", ("Selection/provenance", "Create timing")),
+    ("Failure row", "FCM", ("Failure point", "Consistency invariant")),
+    ("Interface row", "MIM", ("Producer module", "Consumer module")),
+    ("Mechanism row", "MECH", ("Selected production mechanism", "Canonical owner")),
+]
+
+
+def canonical_mechanism_model_row_id(row: dict[str, str]) -> str:
+    normalized_headers = {re.sub(r"[^a-z0-9]+", "", key.lower()) for key in row}
+    for label, prefix, signature_columns in CANONICAL_MECHANISM_MODEL_ROW_SCHEMAS:
+        required_headers = {
+            re.sub(r"[^a-z0-9]+", "", column.lower())
+            for column in (label, *signature_columns)
+        }
+        if not required_headers <= normalized_headers:
+            continue
+        value = table_get(row, label).strip()
+        if re.fullmatch(rf"{prefix}-\d{{3}}", value):
+            return value
+    return ""
+
+
+def validate_mechanism_model_row_identity(markdown: str, artifact: str) -> list[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for row in table_dicts(markdown):
+        row_id = canonical_mechanism_model_row_id(row)
+        if not row_id:
+            continue
+        if row_id in seen:
+            duplicates.add(row_id)
+        seen.add(row_id)
+    if not duplicates:
+        return []
+    return [
+        f"{artifact}: mechanism model row IDs must be unique canonical identities; duplicate rows: "
+        + ", ".join(sorted(duplicates))
+    ]
+
+
 def validate_mechanism_design_model(change_dir: Path, stage: str, proposal: str, spec: str, plan: str, tasks: str) -> list[str]:
     errors: list[str] = []
     if stage not in {"all", "aip", "readiness", "design", "archaeology", "contract", "frontend-contract", "verification", "task-planning", "pre-execution"}:
@@ -1970,6 +2015,8 @@ def validate_mechanism_design_model(change_dir: Path, stage: str, proposal: str,
         return errors
     if not body.strip():
         return errors
+
+    errors.extend(validate_mechanism_model_row_identity(body, str(path)))
 
     required_sections = {
         "Mechanism Row Inventory": [
