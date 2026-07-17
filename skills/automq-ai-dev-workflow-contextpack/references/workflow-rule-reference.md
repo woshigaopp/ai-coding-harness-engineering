@@ -56,7 +56,7 @@ specs/changes/<change-id>/workflow-workdir.md
 - 当前 branch、base branch、base commit、git top-level。
 - 创建时间和命令证据：`pwd`、`git branch --show-current`、`git rev-parse HEAD`、`git rev-parse --show-toplevel`、`git worktree list`。
 
-`workflow-workdir.md` 是恢复身份锚点，不是普通说明文档。每次上下文压缩恢复、新 session 继续、当前 cwd 不确定、工具摘要提到不同 worktree、或用户说“继续/看看当前执行”时，第一步必须读取该文件，并用当前实际值逐项比对 `Worktree path`、`Change dir absolute path`、`Change id`、`Branch name` 和 `Base commit`。比对结果必须追加到 `workflow-workdir.md#Resume Verification`，然后才能读取业务代码或修改任何 workflow artifact。
+`workflow-workdir.md` 是恢复身份锚点，不是普通说明文档。上下文压缩恢复、新 session、当前 cwd 不确定或工具摘要提到不同 worktree 时，运行 `workflowctl.py verify-resume <change-dir>` 对比 `Worktree path`、`Change dir absolute path`、`Change id`、`Branch name` 和 `Base commit`。命令把结果写为 hash-chained `resume_verified` event，不修改 identity artifact；同一 session 内没有 cwd/branch/change 漂移证据的普通“继续”不重复装载规则全文。
 
 硬规则：
 
@@ -64,7 +64,8 @@ specs/changes/<change-id>/workflow-workdir.md
 - 如果当前 cwd / branch / change dir 与 `workflow-workdir.md` 不一致，必须停止、报告 expected/actual，或切回该文件记录的 worktree；不得新建 branch、worktree、change-id、`purpose.md` 或 Atomic Issues。
 - 如果找不到 `workflow-workdir.md`，但聊天记录、`workflow-state.yaml`、`source-intake-ledger.md` 或用户提供路径能指向已有 active change，必须先恢复并补写该文件；不得因为缺这个文件就重开。
 - 新建 worktree/change-id 只允许在确认没有 active change，或用户明确说“重新开始/废弃旧执行/从头新建”之后。
-- 所有阶段 receipt 必须封存 `workflow-workdir.md` 的稳定身份区；`Resume Verification` 是追加式恢复审计，不参与 identity digest。修改 worktree/change/branch/base 等身份字段会使 receipt stale，追加匹配的恢复行不会。
+- 所有阶段 receipt 必须封存不可变的 `workflow-workdir.md`。修改 worktree/change/branch/base 等身份字段会使 receipt stale；恢复审计只进入 `workflow-events.yaml`。
+- Base branch 为 `origin/*` 时，必须在 source/current-code construction 前记录 `fetched-remote`、Remote OID、fetch 时间和 `git fetch` 命令，且 Remote OID 等于 Base commit。
 
 ### Subagent Usage Hard Gate
 
@@ -145,8 +146,8 @@ Human participation mode：
 
 逐条交互规则：
 
-- 一次只能向用户发出一条 `Human Decision Prompt`。用户对当前决策做出明确选择、授权、要求重写、或保持 open 后，才能发出下一条。
-- 不得一次性列出多条待确认决策让用户批量选择；不得用“以上决策是否都同意”关闭多个 `PDEC/ADEC/DEC/C/VER`。
+- 默认一次只发一条 `Human Decision Prompt`。用户明确要求集中查看时，可以展示 decision bundle；每条仍须有独立 ID、key、推荐、备选、影响和 `batch_eligible=true`。
+- 多项确认只有在 `decision-bundles/HDB-xxx.yaml` 固定完整 prompt snapshot/hash、精确 decision list、`response_scope=all-listed`、用户原文、ISO-8601 时间和 receipt hash 时有效。bundle 文件名必须等于 `bundle_id`，所有 decision ID 必须属于其 `stage`，且只进入该 stage 的 receipt；后续 AIP/design bundle 不得反向失效 PRD receipt。没有 bundle receipt 的“以上都同意”不能关闭多个决策；用户改选或不明确的项必须拆回单项。
 - 用户回答后，必须先把该决策按现有决策状态模型落盘为 `locked`、`open` 或 `superseded`，更新对应 `decision-reviews/<stage>-decisions.md`、Decision Registry、Semantic Consumption Matrix 和必要的 Backflow Invalidation Matrix，再继续下一条。用户拒绝推荐方案、要求重写、暂不决策、或需要回流时，决策状态保持 `open`，具体原因写入 `User response` / `Resolution` / `Backflow action` 字段；不得发明 `rejected`、`needs-rework`、`still-open` 等新状态。
 - 若用户没有明确选择，或回答改变了需求/架构/契约含义，当前阶段必须保持 `blocked` 并回流到最早受影响阶段；不得把模糊回答解释成同意推荐方案。
 - 在 `human-decision-participation` 模式下，`workflowctl.py pass-stage <stage>` 前必须能在阶段决策文档中看到每条人类决策的 prompt、用户响应、最终状态、影响 artifact 和更新时间。
@@ -428,6 +429,8 @@ Decision surface discovery 和 Generative Surface Stress Tests 是 review 的前
 
 阶段级 multi-perspective review 配置：
 
+是否需要 review、初审/修复轮最少人数和上限以 `workflow-state-machine.yaml#review_policy` 为唯一机器事实源。`source-intake` 不单独启动 subagent review，其 source/current-state 证据由 PRD/readiness reviewer 消费。`initial` 使用完整视角；`semantic-repair`、`projection-repair`、`format-repair` 只复审受影响视角，最少 1 人，不因 frozen hash 的机械变化自动召回全部 reviewer。修复轮必须在 `repair_context` 固定 immutable `previous_review_ref`、触发 finding/validator failures、实际变更 artifacts 和缩窄视角理由；缺任一项按 initial review 处理，不能只改 `review_kind` 绕过初审人数。
+
 | Gate | Default reviewer count | Required reviewer perspectives | Frozen input focus | Blocking output |
 |---|---:|---|---|---|
 | Decision Surface Discovery 后 | 3 | Product semantics、Architecture/owner、Verification/acceptance | `decision-surface-discovery.md`、Generative Surface Stress Tests、Surface Obligation Projection Matrix、Decision Registry、Semantic Consumption Matrix | 漏 surface、stress test 未实际运行、provider/consumer/mock owner 缺失、negative assertion 或 verification 缺失 |
@@ -521,12 +524,12 @@ Context pack 不是入口 skill 的可选建议。下游阶段必须把对应 co
 恢复判定规则：
 
 - 如果 `workflow-workdir.md` 记录的 worktree/change-id 与当前 cwd 不一致，必须以 `workflow-workdir.md` 为准切回，或报告 mismatch blocked；不得按当前 cwd 重建。
-- 如果发现候选 change 的 source/doc title、base branch、base commit、branch/worktree 证据与当前用户需求匹配，必须切回该 worktree 和 change-id 继续，并补齐/更新 `workflow-workdir.md` 的 Resume Verification；不得创建新的 worktree、branch 或 change-id。
+- 如果发现候选 change 的 source/doc title、base branch、base commit、branch/worktree 证据与当前用户需求匹配，必须切回该 worktree 和 change-id，运行 `workflowctl.py verify-resume`；不得创建新的 worktree、branch 或 change-id。
 - 如果当前 cwd 不是该 worktree，这只是恢复定位问题，不是重新隔离理由。必须使用已登记的 Worktree path 继续。
 - 如果存在多个候选 change，选择最近 `workflow-state.yaml` / `plan.md` 修改时间且 source/doc title 匹配的 active change；无法确定时报告候选清单并停止，不得自行开新 worktree。
 - 只有在确认没有 active change，或用户明确说“重新开始/废弃旧执行/从头新建”，才允许进入 Repo Isolation Gate 创建新 worktree。
 
-必须把恢复结果写入或追加到 `source-intake-ledger.md#Session Resume Identity Gate` 或 `plan.md#Session Resume Identity Gate`。如果这个 gate 没有通过，不得读取业务代码、生成新 artifact、进入任务规划或实现。
+恢复结果由 `workflow-events.yaml#resume_verified` 持久化，不重复写入 source/plan 等语义 artifact。如果这个 gate 没有通过，不得读取业务代码、生成新 artifact、进入任务规划或实现。
 
 ### Repo Isolation Gate
 
@@ -950,7 +953,7 @@ specs/changes/<change-id>/decision-reviews/<stage>-decisions.md
 
 所有入口输入必须先进入 `Source Intake Ledger`。用户提供的 PRD、AIP、飞书链接、issue、补充设计、Terraform/API 草案、历史方案、代码路径、运行时证据，都必须登记读取状态、读取方式、下游映射和冲突。存在 behavior-affecting source 未读或 blocked 时，不得进入设计、契约、任务规划或实现。
 
-PRD normalized 之后、AIP/design 锁定工程方案之前，如果需求涉及云资源、K8s/Helm/Terraform/IAM/network/storage/compute/runtime、第三方 API/SDK、官方协议、autoscaling/scheduling/lifecycle、metrics/logs/events 或 mock acceptance / repo-specific acceptance runtime 外部依赖，必须创建 `specs/changes/<change-id>/external-capability-research.md`。该文档必须登记官方文档/SDK/API/真实 adapter/source、外部能力事实、不支持/限制、约束、设计影响和 mock acceptance / repo-specific acceptance runtime 边界。任何影响设计的外部事实必须进入 ADEC/DEC、C、VER、semantic_carrier 和 owner packet，或有 locked N/A / Not Run。没有调研消费闭环时，不得进入 AIP readiness passed、new-feature-design、cross-module-contract 或 atomic-task-planning。
+PRD normalized 之后、AIP/design 锁定工程方案之前，如果需求涉及云资源、K8s/Helm/Terraform/IAM/network/storage/compute/runtime、第三方 API/SDK、官方协议、autoscaling/scheduling/lifecycle、metrics/logs/events 或 mock acceptance / repo-specific acceptance runtime 外部依赖，必须创建 `specs/changes/<change-id>/external-capability-research.md`。它是 AIP-owned research synthesis，由 AIP receipt 封存，不属于 source-intake receipt；source-intake 只登记其消费的原始 URL、代码、SDK 和用户输入。该文档必须登记外部能力事实、不支持/限制、约束、设计影响和 acceptance 边界。任何影响设计的外部事实必须进入 ADEC/DEC、C、VER、semantic_carrier 和 owner packet，或有 locked N/A / Not Run。没有调研消费闭环时，不得进入 AIP readiness passed、new-feature-design、cross-module-contract 或 atomic-task-planning。
 
 从 PRD 生成后开始，所有阶段必须维护 `Semantic Consumption Matrix`。上游 `REQ/SCN/PDEC/DEC/C/MIG/VER` 不能只靠 ID 被后续引用，必须在每个阶段证明被消费、派生、复制、验证或明确丢弃。任何 `blocked`、无理由 dropped、或只引用 ID 不复制语义的行，都阻塞下一阶段。
 

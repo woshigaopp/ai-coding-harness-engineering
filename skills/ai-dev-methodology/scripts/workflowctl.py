@@ -12,6 +12,7 @@ import argparse
 import copy
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -231,20 +232,12 @@ STAGE_OBLIGATION_STATUSES = {
     "not_applicable",
 }
 
+REVIEW_POLICY = {
+    str(stage): dict(policy) if isinstance(policy, dict) else {}
+    for stage, policy in dict(WORKFLOW_STATE_MACHINE.get("review_policy", {})).items()
+}
 MULTI_PERSPECTIVE_REVIEW_STAGES = {
-    "prd",
-    "readiness",
-    "aip",
-    "design",
-    "archaeology",
-    "migration",
-    "frontend-contract",
-    "contract",
-    "verification",
-    "task-planning",
-    "pre-execution",
-    "mock-acceptance",
-    "product-acceptance",
+    stage for stage, policy in REVIEW_POLICY.items() if policy.get("required") is True
 }
 MULTI_PERSPECTIVE_STAGE_ALIASES = {
     "requirement-readiness": "readiness",
@@ -366,9 +359,9 @@ HUMAN_DECISION_RESPONSE_RE = re.compile(
 )
 HUMAN_DECISION_PROMPT_RE = re.compile(r"\b(?:HDP-\d{3}|Human Decision Prompt|Prompt ID|prompt summary|决策提示|逐条)\b", re.IGNORECASE)
 HUMAN_DECISION_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}|decided at|confirmed at|更新时间|确认时间", re.IGNORECASE)
+ISO_TIMESTAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})")
 
 OPTIONAL_RECEIPT_ARTIFACTS = {
-    "source-intake": ["external-capability-research.md"],
     "prd": ["decision-surface-discovery.md"],
     "aip": ["decision-surface-discovery.md", "external-capability-research.md", "mechanism-design-model.md"],
     "readiness": ["decision-surface-discovery.md", "external-capability-research.md", "mechanism-design-model.md"],
@@ -1239,6 +1232,14 @@ def stage_artifact_paths(change_dir: Path, stage: str) -> list[Path]:
         path = change_dir / rel
         if path.exists():
             paths.append(path)
+    if stage in HUMAN_DECISION_REQUIRED_STAGES:
+        for path in sorted((change_dir / "decision-bundles").glob("*.yaml")):
+            try:
+                bundle_stage = text(as_dict(load_yaml(path)).get("stage"))
+            except ValueError:
+                continue
+            if bundle_stage == stage:
+                paths.append(path)
     return paths
 
 
@@ -1279,6 +1280,106 @@ def artifact_receipt_digest(path: Path, rel: str) -> str:
         identity = re.split(r"^##+\s+Resume Verification\b", body, maxsplit=1, flags=re.MULTILINE)[0]
         return hashlib.sha256((identity.rstrip() + "\n").encode("utf-8")).hexdigest()
     return sha256_file(path)
+
+
+def split_markdown_table_row(line: str) -> list[str]:
+    """Split a Markdown table row without treating escaped or inline-code pipes as separators."""
+    value = line.strip()
+    if value.startswith("|"):
+        value = value[1:]
+    if value.endswith("|") and not value.endswith(r"\|"):
+        value = value[:-1]
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    in_code = False
+    for char in value:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            current.append(char)
+            continue
+        if char == "`":
+            in_code = not in_code
+            current.append(char)
+            continue
+        if char == "|" and not in_code:
+            cells.append("".join(current).strip().strip("`"))
+            current = []
+            continue
+        current.append(char)
+    if escaped:
+        current.append("\\")
+    cells.append("".join(current).strip().strip("`"))
+    return cells
+
+
+def normalized_markdown_heading(value: str) -> str:
+    value = re.sub(r"[`*_]", "", value).strip().lower()
+    return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "-", value).strip("-")
+
+
+def markdown_reference_section(body: str, fragment: str) -> str:
+    if not fragment.strip():
+        return body
+    wanted = normalized_markdown_heading(fragment)
+    matches = list(re.finditer(r"^(#{1,6})\s+(.+?)\s*$", body, re.MULTILINE))
+    for index, match in enumerate(matches):
+        if normalized_markdown_heading(match.group(2)) != wanted:
+            continue
+        level = len(match.group(1))
+        end = len(body)
+        for next_match in matches[index + 1:]:
+            if len(next_match.group(1)) <= level:
+                end = next_match.start()
+                break
+        return body[match.start():end]
+    return ""
+
+
+def semantic_markdown_text(body: str) -> str:
+    """Normalize presentation-only Markdown differences while preserving semantic text."""
+    body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+    normalized: list[str] = []
+    for raw in body.replace("\r\n", "\n").replace("\r", "\n").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        heading = re.match(r"^#{1,6}\s+(.+?)\s*$", line)
+        if heading:
+            normalized.append(f"heading:{re.sub(r'\\s+', ' ', heading.group(1)).strip()}")
+            continue
+        if line.startswith("|") and line.endswith("|"):
+            cells = split_markdown_table_row(line)
+            if cells and all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells):
+                continue
+            normalized.append("table:" + "|".join(re.sub(r"\s+", " ", cell).strip() for cell in cells))
+            continue
+        normalized.append(re.sub(r"\s+", " ", line))
+    return "\n".join(normalized)
+
+
+def artifact_reference_digest(path: Path, reference: str, object_id: str = "") -> tuple[str, str]:
+    """Return a semantic digest and the selected canonical text for one artifact reference."""
+    body = read_optional(path)
+    fragment = reference.split("#", 1)[1].strip() if "#" in reference else ""
+    selected = markdown_reference_section(body, fragment) if path.suffix.lower() == ".md" else body
+    if fragment and not selected:
+        raise ValueError(f"referenced Markdown section does not exist: {reference}")
+    digest_body = selected
+    if object_id and path.suffix.lower() == ".md":
+        object_lines = [
+            line
+            for line in selected.splitlines()
+            if re.search(rf"(?<![A-Z0-9-]){re.escape(object_id)}(?![A-Z0-9-])", line, re.IGNORECASE)
+        ]
+        if object_lines:
+            digest_body = "\n".join(object_lines)
+    semantic = semantic_markdown_text(digest_body) if path.suffix.lower() == ".md" else digest_body
+    return hashlib.sha256((semantic.rstrip() + "\n").encode("utf-8")).hexdigest(), selected
 
 
 def write_stage_plan_snapshot(change_dir: Path, stage: str) -> None:
@@ -1617,6 +1718,13 @@ def reopen_stage(change_dir: Path, stage: str, backflow_id: str, reason: str) ->
         print(f"ERROR: {backflow_id}: missing backflow trigger; record it in backflow.yaml first", file=sys.stderr)
         return 1
     invalidates = as_dict(trigger.get("invalidates"))
+    resolution_stage = text(trigger.get("resolution_stage"))
+    if resolution_stage not in STAGE_CONSTRUCTION_STAGES:
+        print(f"ERROR: {backflow_id}: resolution_stage must name a construction stage", file=sys.stderr)
+        return 1
+    if ALL_STAGES.index(resolution_stage) < ALL_STAGES.index(stage):
+        print(f"ERROR: {backflow_id}: resolution_stage cannot be earlier than reopened stage {stage}", file=sys.stderr)
+        return 1
     if not any(as_list(invalidates.get(key)) for key in ["artifacts", "decisions", "contracts", "verifications", "tasks"]):
         print(
             f"ERROR: {backflow_id}: backflow trigger has no declared invalidation; run backflow after recording concrete affected artifacts/objects",
@@ -1715,6 +1823,75 @@ def validate_stage_reopens(model: WorkflowModel) -> list[str]:
     return errors
 
 
+def resolve_backflow(change_dir: Path, backflow_id: str, resolution: str) -> int:
+    if len(resolution.strip()) < 12:
+        print("ERROR: resolve-backflow --resolution must be concrete", file=sys.stderr)
+        return 1
+    model = WorkflowModel(change_dir)
+    trigger = as_dict(model.backflow_triggers.get(backflow_id))
+    if not trigger:
+        print(f"ERROR: {backflow_id}: missing backflow trigger", file=sys.stderr)
+        return 1
+    if text(trigger.get("status")) not in {"open", "blocked"}:
+        print(f"ERROR: {backflow_id}: only open/blocked backflow can be resolved", file=sys.stderr)
+        return 1
+    resolution_stage = text(trigger.get("resolution_stage"))
+    receipts = as_dict(model.workflow.get("stage_receipts"))
+    na_receipts = as_dict(model.workflow.get("stage_na_receipts"))
+    receipt = as_dict(receipts.get(resolution_stage)) or as_dict(na_receipts.get(resolution_stage))
+    if not receipt:
+        print(f"ERROR: {backflow_id}: resolution stage {resolution_stage} has no fresh receipt", file=sys.stderr)
+        return 1
+    reopen = next(
+        (
+            as_dict(item)
+            for item in reversed(as_list(model.workflow.get("stage_reopens")))
+            if text(as_dict(item).get("backflow_id")) == backflow_id
+        ),
+        {},
+    )
+    if not reopen:
+        print(f"ERROR: {backflow_id}: no matching reopen audit exists", file=sys.stderr)
+        return 1
+    if text(receipt.get("issued_at")) < text(reopen.get("reopened_at")):
+        print(f"ERROR: {backflow_id}: resolution receipt predates the reopen audit", file=sys.stderr)
+        return 1
+    trigger.update(
+        {
+            "status": "resolved",
+            "resolved_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            "resolution": resolution.strip(),
+            "resolution_receipt_stage": resolution_stage,
+            "resolution_receipt_hash": text(receipt.get("receipt_hash")),
+        }
+    )
+    model.backflow_triggers[backflow_id] = trigger
+    model.backflow_doc["triggers"] = model.backflow_triggers
+    write_yaml(change_dir / "backflow.yaml", model.backflow_doc)
+    append_workflow_event(
+        change_dir,
+        "backflow_resolved",
+        {"backflow_id": backflow_id, "resolution_stage": resolution_stage, "receipt_hash": receipt.get("receipt_hash")},
+    )
+    print(f"Backflow {backflow_id} resolved by fresh {resolution_stage} receipt")
+    return 0
+
+
+def auto_resolve_backflows(change_dir: Path, stage: str) -> None:
+    model = WorkflowModel(change_dir)
+    for backflow_id, raw in list(model.backflow_triggers.items()):
+        trigger = as_dict(raw)
+        if text(trigger.get("status")) not in {"open", "blocked"}:
+            continue
+        if text(trigger.get("resolution_stage")) != stage:
+            continue
+        resolve_backflow(
+            change_dir,
+            backflow_id,
+            f"Fresh {stage} receipt closes the declared backflow repair boundary",
+        )
+
+
 def upstream_receipt_hashes_for_task_planning(workflow_doc: dict[str, Any]) -> dict[str, str]:
     return stage_upstream_receipt_hashes(workflow_doc, "task-planning")
 
@@ -1757,7 +1934,7 @@ def markdown_table_values(markdown: str) -> dict[str, str]:
         stripped = line.strip()
         if not stripped.startswith("|") or not stripped.endswith("|"):
             continue
-        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        cells = split_markdown_table_row(stripped)
         if len(cells) < 2:
             continue
         if all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells):
@@ -1791,7 +1968,10 @@ def validate_workdir_identity(model: WorkflowModel) -> list[str]:
     body = read_optional(path)
     identity_body = re.split(r"^##+\s+Resume Verification\b", body, maxsplit=1, flags=re.MULTILINE)[0]
     values = markdown_table_values(identity_body)
-    required = ["worktree path", "change dir absolute path", "change id", "branch name", "base commit", "git top level"]
+    required = [
+        "worktree path", "change dir absolute path", "change id", "branch name",
+        "base branch", "base commit", "base source mode", "git top level",
+    ]
     for key in required:
         if not text(values.get(key)):
             errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: Canonical Workdir missing {key}")
@@ -1823,6 +2003,22 @@ def validate_workdir_identity(model: WorkflowModel) -> list[str]:
         errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: branch mismatch; expected {recorded_branch}, actual {actual_branch}")
 
     recorded_base = text(values.get("base commit"))
+    base_branch = text(values.get("base branch"))
+    base_source_mode = text(values.get("base source mode"))
+    if base_source_mode not in {"fetched-remote", "pinned-commit", "local-only"}:
+        errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: base source mode is invalid: {base_source_mode or '<empty>'}")
+    if base_branch.startswith("origin/"):
+        remote_oid = text(values.get("remote oid"))
+        fetched_at = text(values.get("remote fetched at"))
+        fetch_evidence = text(values.get("fetch command evidence"))
+        if base_source_mode != "fetched-remote":
+            errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: origin base requires base source mode=fetched-remote")
+        if remote_oid != recorded_base:
+            errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: Remote OID must equal Base commit for an origin base")
+        if not ISO_TIMESTAMP_RE.fullmatch(fetched_at):
+            errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: Remote fetched at must be an ISO-8601 timestamp for an origin base")
+        if "git fetch" not in fetch_evidence:
+            errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: Fetch command evidence must record git fetch for an origin base")
     if repo_root and recorded_base:
         base_exists = subprocess.run(
             ["git", "-C", str(repo_root), "cat-file", "-e", f"{recorded_base}^{{commit}}"],
@@ -1864,6 +2060,26 @@ def validate_workdir_identity(model: WorkflowModel) -> list[str]:
     if not resume_section_present:
         errors.append(f"{WORKDIR_IDENTITY_ARTIFACT}: missing Resume Verification section")
     return errors
+
+
+def verify_resume(change_dir: Path) -> int:
+    model = WorkflowModel(change_dir)
+    errors = validate_workdir_identity(model)
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+    repo_root = git_root_for(change_dir)
+    details = {
+        "change_dir": change_dir.resolve().as_posix(),
+        "worktree_path": repo_root.resolve().as_posix() if repo_root else "",
+        "branch": command_output(["git", "-C", str(repo_root), "branch", "--show-current"]) if repo_root else "",
+        "head": command_output(["git", "-C", str(repo_root), "rev-parse", "HEAD"]) if repo_root else "",
+        "result": "matched",
+    }
+    append_workflow_event(change_dir, "resume_verified", details)
+    print("Resume identity verification passed")
+    return 0
 
 
 def validate_subagent_execution_proof(container: dict[str, Any], context: str, change_dir: Path) -> list[str]:
@@ -4088,6 +4304,7 @@ def stage_obligation_row_errors(
 
     artifact_hashes: dict[str, str] = {}
     artifact_bodies: list[str] = []
+    object_id = text(row.get("object_id"))
     for reference in meaningful_list(closure.get("canonical_artifacts"), min_chars=4):
         path = stage_artifact_reference_path(change_dir, reference)
         if path is None:
@@ -4096,8 +4313,13 @@ def stage_obligation_row_errors(
         if not path.exists() or not path.is_file():
             errors.append(stage_rule_diagnostic(stage, rule, f"canonical artifact does not exist: {reference}"))
             continue
-        artifact_hashes[reference.split("#", 1)[0].strip()] = sha256_file(path)
-        artifact_bodies.append(read_optional(path))
+        try:
+            digest, selected_body = artifact_reference_digest(path, reference, object_id)
+        except ValueError as exc:
+            errors.append(stage_rule_diagnostic(stage, rule, str(exc)))
+            continue
+        artifact_hashes[reference] = digest
+        artifact_bodies.append(selected_body)
 
     canonical_text = "\n".join(artifact_bodies)
     id_patterns = {
@@ -4216,6 +4438,85 @@ def stage_construction_context(
     return errors, ledger, expected_by_id
 
 
+def validate_prd_construction_compatibility(change_dir: Path) -> list[str]:
+    """Run global PRD shape checks before readonly review and pass-stage."""
+    validator_path = Path(__file__).resolve().parent / "validate_artifacts.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "validate_artifacts_prd_construction_compatibility", validator_path
+    )
+    if module_spec is None or module_spec.loader is None:
+        return [f"SC-PRD-GLOBAL-COMPAT-001: cannot load {validator_path}"]
+    artifact_validator = importlib.util.module_from_spec(module_spec)
+    try:
+        module_spec.loader.exec_module(artifact_validator)
+    except Exception as exc:
+        return [f"SC-PRD-GLOBAL-COMPAT-001: failed to load {validator_path}: {exc}"]
+
+    proposal = read_optional(change_dir / "proposal.md")
+    spec = read_optional(change_dir / "spec.md")
+    plan = read_optional(change_dir / "plan.md")
+    tasks = read_optional(change_dir / "tasks.md")
+    errors: list[str] = []
+    errors.extend(artifact_validator.validate_prd_completeness(change_dir, proposal, spec, plan))
+    errors.extend(artifact_validator.validate_rubric_scorecard(change_dir, plan, tasks))
+    errors.extend(
+        artifact_validator.validate_decision_surface_discovery(
+            change_dir, proposal, spec, plan, tasks, "prd"
+        )
+    )
+    return [f"SC-PRD-GLOBAL-COMPAT-001: {error}" for error in errors]
+
+
+def validate_aip_construction_compatibility(change_dir: Path) -> list[str]:
+    """Run deterministic AIP shape checks before readonly review and pass-stage."""
+    validator_path = Path(__file__).resolve().parent / "validate_artifacts.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "validate_artifacts_aip_construction_compatibility", validator_path
+    )
+    if module_spec is None or module_spec.loader is None:
+        return [f"SC-AIP-GLOBAL-COMPAT-001: cannot load {validator_path}"]
+    artifact_validator = importlib.util.module_from_spec(module_spec)
+    try:
+        module_spec.loader.exec_module(artifact_validator)
+    except Exception as exc:
+        return [f"SC-AIP-GLOBAL-COMPAT-001: failed to load {validator_path}: {exc}"]
+
+    proposal = read_optional(change_dir / "proposal.md")
+    spec = read_optional(change_dir / "spec.md")
+    plan = read_optional(change_dir / "plan.md")
+    tasks = read_optional(change_dir / "tasks.md")
+    workflow_state = as_dict(load_yaml(change_dir / "workflow-state.yaml"))
+    errors: list[str] = []
+    errors.extend(
+        artifact_validator.validate_external_capability_research(
+            change_dir, proposal, spec, plan, tasks, "aip"
+        )
+    )
+    errors.extend(
+        artifact_validator.validate_mechanism_design_model(
+            change_dir, "aip", proposal, spec, plan, tasks
+        )
+    )
+    errors.extend(artifact_validator.validate_engineering_propose(change_dir, plan))
+    errors.extend(
+        artifact_validator.validate_aip_hard_gate(
+            change_dir,
+            proposal,
+            spec,
+            plan,
+            tasks,
+            workflow_state,
+            True,
+        )
+    )
+    errors.extend(artifact_validator.validate_rubric_scorecard(change_dir, plan, tasks))
+    if plan and artifact_validator.mostly_non_chinese(plan):
+        errors.append(
+            f"{change_dir / 'plan.md'}: main narrative appears to be English; workflow artifacts must default to Chinese"
+        )
+    return [f"SC-AIP-GLOBAL-COMPAT-001: {error}" for error in errors]
+
+
 def validate_obligation(change_dir: Path, stage: str, obligation_id: str, not_applicable: bool = False) -> int:
     if yaml is None:
         print("PyYAML is required for workflowctl validate-obligation", file=sys.stderr)
@@ -4241,6 +4542,18 @@ def validate_obligation(change_dir: Path, stage: str, obligation_id: str, not_ap
     if target is None or expected is None:
         print(f"ERROR: {stage}: obligation {obligation_id} is not present; rerun prepare-stage", file=sys.stderr)
         return 1
+    if text(expected.get("rule_id")) == "SC-PRD-GLOBAL-COMPAT-001" and not not_applicable:
+        compatibility_errors = validate_prd_construction_compatibility(change_dir)
+        if compatibility_errors:
+            for error in compatibility_errors:
+                print(f"ERROR: {error}", file=sys.stderr)
+            return 1
+    if text(expected.get("rule_id")) == "SC-AIP-GLOBAL-COMPAT-001" and not not_applicable:
+        compatibility_errors = validate_aip_construction_compatibility(change_dir)
+        if compatibility_errors:
+            for error in compatibility_errors:
+                print(f"ERROR: {error}", file=sys.stderr)
+            return 1
     target["status"] = "not_applicable" if not_applicable else "closed"
     errors = stage_obligation_row_errors(
         change_dir,
@@ -4255,10 +4568,16 @@ def validate_obligation(change_dir: Path, stage: str, obligation_id: str, not_ap
         return 1
     closure = as_dict(target.get("closure"))
     artifact_hashes: dict[str, str] = {}
+    object_id = text(target.get("object_id"))
     for reference in meaningful_list(closure.get("canonical_artifacts"), min_chars=4):
         path = stage_artifact_reference_path(change_dir, reference)
         if path is not None and path.exists() and path.is_file():
-            artifact_hashes[reference.split("#", 1)[0].strip()] = sha256_file(path)
+            try:
+                digest, _ = artifact_reference_digest(path, reference, object_id)
+            except ValueError as exc:
+                print(f"ERROR: {stage_rule_diagnostic(stage, expected, str(exc))}", file=sys.stderr)
+                return 1
+            artifact_hashes[reference] = digest
     target["validation"] = {
         "rule_id": text(expected.get("rule_id")),
         "stage": stage,
@@ -4298,6 +4617,18 @@ def validate_stage_construction(model: WorkflowModel, stage: str) -> list[str]:
                     expected=expected,
                 )
             )
+    if stage == "prd" and any(
+        text(as_dict(row).get("rule_id")) == "SC-PRD-GLOBAL-COMPAT-001"
+        and text(as_dict(row).get("status")) == "closed"
+        for row in as_list(ledger.get("obligations"))
+    ):
+        errors.extend(validate_prd_construction_compatibility(model.change_dir))
+    if stage == "aip" and any(
+        text(as_dict(row).get("rule_id")) == "SC-AIP-GLOBAL-COMPAT-001"
+        and text(as_dict(row).get("status")) == "closed"
+        for row in as_list(ledger.get("obligations"))
+    ):
+        errors.extend(validate_aip_construction_compatibility(model.change_dir))
     return errors
 
 
@@ -5665,7 +5996,30 @@ def validate_backflow(model: WorkflowModel) -> list[str]:
     for bf_id, raw in model.backflow_triggers.items():
         trigger = as_dict(raw)
         invalidates = as_dict(trigger.get("invalidates"))
-        if trigger.get("status") in {"open", "blocked"}:
+        status = text(trigger.get("status"))
+        resolution_stage = text(trigger.get("resolution_stage"))
+        if status not in {"open", "blocked", "resolved", "closed"}:
+            errors.append(f"{bf_id}: status must be open/blocked/resolved/closed")
+        if resolution_stage not in STAGE_CONSTRUCTION_STAGES:
+            errors.append(f"{bf_id}: resolution_stage must name a construction stage")
+        if status in {"resolved", "closed"}:
+            receipt = as_dict(as_dict(model.workflow.get("stage_receipts")).get(resolution_stage)) or as_dict(
+                as_dict(model.workflow.get("stage_na_receipts")).get(resolution_stage)
+            )
+            if not text(trigger.get("resolution")) or not text(trigger.get("resolved_at")):
+                errors.append(f"{bf_id}: resolved backflow requires resolution and resolved_at")
+            if text(trigger.get("resolution_receipt_stage")) != resolution_stage:
+                errors.append(f"{bf_id}: resolution_receipt_stage must equal resolution_stage")
+            if not receipt or text(trigger.get("resolution_receipt_hash")) != text(receipt.get("receipt_hash")):
+                errors.append(f"{bf_id}: resolution receipt is missing or stale")
+        if status in {"open", "blocked"}:
+            if not any(
+                text(as_dict(item).get("backflow_id")) == str(bf_id)
+                for item in as_list(model.workflow.get("stage_reopens"))
+            ):
+                errors.append(
+                    f"{bf_id}: open backflow has no matching reopen audit; run reopen-stage before revalidation"
+                )
             for task_id in as_list(invalidates.get("tasks")):
                 task_status = as_dict(model.tasks.get(str(task_id))).get("status")
                 if task_status not in {"blocked", "pending-rewrite", "pending-rerun"}:
@@ -6018,14 +6372,42 @@ def validate_no_production_downgrade_language(model: WorkflowModel, stage: str) 
 
 def markdown_table_rows(markdown: str) -> list[list[str]]:
     rows: list[list[str]] = []
-    for raw in markdown.splitlines():
-        line = raw.strip()
-        if not line.startswith("|") or not line.endswith("|"):
-            continue
-        if re.fullmatch(r"\|[\s:\-|]+\|", line):
-            continue
-        rows.append([cell.strip().strip("`") for cell in line.strip("|").split("|")])
+    for headers, data in markdown_tables(markdown):
+        rows.append(headers)
+        rows.extend(data)
     return rows
+
+
+def markdown_tables(markdown: str) -> list[tuple[list[str], list[list[str]]]]:
+    lines = markdown.splitlines()
+    tables: list[tuple[list[str], list[list[str]]]] = []
+    index = 0
+    while index + 1 < len(lines):
+        header_line = lines[index].strip()
+        separator_line = lines[index + 1].strip()
+        if not (header_line.startswith("|") and header_line.endswith("|")):
+            index += 1
+            continue
+        if not (separator_line.startswith("|") and separator_line.endswith("|")):
+            index += 1
+            continue
+        headers = split_markdown_table_row(header_line)
+        separators = split_markdown_table_row(separator_line)
+        if len(headers) != len(separators) or not separators or not all(
+            re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in separators
+        ):
+            index += 1
+            continue
+        rows: list[list[str]] = []
+        index += 2
+        while index < len(lines):
+            data_line = lines[index].strip()
+            if not (data_line.startswith("|") and data_line.endswith("|")):
+                break
+            rows.append(split_markdown_table_row(data_line))
+            index += 1
+        tables.append((headers, rows))
+    return tables
 
 
 def section(markdown: str, name: str) -> str:
@@ -6049,59 +6431,35 @@ def first_markdown_section(markdown: str, *names: str) -> str:
 
 
 def markdown_table_dicts(markdown: str) -> list[dict[str, str]]:
-    rows = markdown_table_rows(markdown)
-    if not rows:
-        return []
-    header_index = 0
-    for idx, row in enumerate(rows):
-        joined = " ".join(cell.lower() for cell in row)
-        if (
-            "action id" in joined
-            or "surface" in joined
-            or "user task id" in joined
-            or "form/step" in joined
-            or "contract" in joined
-            or "edge id" in joined
-            or "txxx" in joined
-            or "candidate rows" in joined
-        ):
-            header_index = idx
-            break
-    headers = [cell.strip() for cell in rows[header_index]]
     data: list[dict[str, str]] = []
-    for row in rows[header_index + 1:]:
-        if len(row) < len(headers):
-            row = row + [""] * (len(headers) - len(row))
-        mapped = {headers[idx]: row[idx].strip() for idx in range(len(headers))}
-        if any(value for value in mapped.values()):
-            data.append(mapped)
+    for raw_headers, rows in markdown_tables(markdown):
+        headers = [cell.strip() for cell in raw_headers]
+        for row in rows:
+            if len(row) < len(headers):
+                row = row + [""] * (len(headers) - len(row))
+            mapped = {headers[idx]: row[idx].strip() for idx in range(len(headers))}
+            if any(value for value in mapped.values()):
+                data.append(mapped)
     return data
 
 
 def markdown_table_column_count_errors(markdown: str, columns: list[str], artifact: str) -> list[str]:
-    rows = markdown_table_rows(markdown)
-    if not rows:
-        return []
     normalized_columns = {re.sub(r"[^a-z0-9]+", "", column.lower()) for column in columns}
-    header_index: int | None = None
-    for idx, row in enumerate(rows):
-        normalized_row = {re.sub(r"[^a-z0-9]+", "", cell.lower()) for cell in row}
-        if normalized_columns <= normalized_row:
-            header_index = idx
-            break
-    if header_index is None:
-        return []
-    expected = len(rows[header_index])
     errors: list[str] = []
-    for row_number, row in enumerate(rows[header_index + 1:], start=1):
-        if not any(cell.strip() for cell in row):
+    for headers, rows in markdown_tables(markdown):
+        normalized_row = {re.sub(r"[^a-z0-9]+", "", cell.lower()) for cell in headers}
+        if not normalized_columns <= normalized_row:
             continue
-        if len(row) != expected:
-            snippet = " | ".join(row[: min(len(row), 6)])
-            errors.append(
-                f"{artifact}: table row {row_number} has {len(row)} cells but header has {expected}; "
-                f"this usually means a Contract Executable Obligation Matrix column shifted: {snippet}"
-            )
+        expected = len(headers)
+        for row_number, row in enumerate(rows, start=1):
+            if not any(cell.strip() for cell in row):
+                continue
+            if len(row) != expected:
+                snippet = " | ".join(row[: min(len(row), 6)])
+                errors.append(
+                    f"{artifact}: table row {row_number} has {len(row)} cells but header has {expected}; "
+                    f"this usually means a Contract Executable Obligation Matrix column shifted: {snippet}"
+                )
     return errors
 
 
@@ -6226,7 +6584,91 @@ def decision_ids_for_stage(stage: str, value: str) -> set[str]:
     }
 
 
-def has_human_decision_record(decision_id: str, decision_doc: str, interaction: str) -> bool:
+def explicit_bundle_confirmation(value: str) -> bool:
+    response = re.sub(r"\s+", " ", value.strip())
+    if not response:
+        return False
+    if re.search(
+        r"(?:do\s+not|don't|not\s+(?:agree|approve|confirm)|disagree|except|only|"
+        r"不同意|不确认|不采用|拒绝|除.+外|仅(?:同意|确认|采用))",
+        response,
+        re.IGNORECASE,
+    ):
+        return False
+    affirmative = bool(re.search(r"confirm|agree|approve|同意|确认|采用", response, re.IGNORECASE))
+    complete_scope = bool(
+        re.search(r"all(?:[-\s]+listed)?|every|above|listed|全部|所有|以上|逐项", response, re.IGNORECASE)
+    )
+    return affirmative and complete_scope
+
+
+def human_decision_bundle_records(change_dir: Path, stage: str) -> tuple[set[str], list[str]]:
+    accepted: set[str] = set()
+    errors: list[str] = []
+    for path in sorted((change_dir / "decision-bundles").glob("*.yaml")):
+        label = path.relative_to(change_dir).as_posix()
+        try:
+            doc = as_dict(load_yaml(path))
+        except ValueError as exc:
+            errors.append(f"{label}: invalid YAML: {exc}")
+            continue
+        if doc.get("schema_version") != 1:
+            errors.append(f"{label}: schema_version must be 1")
+            continue
+        bundle_id = text(doc.get("bundle_id"))
+        if not re.fullmatch(r"HDB-\d{3}", bundle_id):
+            errors.append(f"{label}: bundle_id must match HDB-xxx")
+        elif path.stem != bundle_id:
+            errors.append(f"{label}: filename must match bundle_id {bundle_id}")
+        bundle_stage = text(doc.get("stage"))
+        if bundle_stage not in HUMAN_DECISION_REQUIRED_STAGES:
+            errors.append(f"{label}: stage must name a human-decision stage")
+            continue
+        if bundle_stage != stage:
+            continue
+        decisions = [as_dict(item) for item in as_list(doc.get("decisions"))]
+        if len(decisions) < 2:
+            errors.append(f"{label}: a decision bundle must contain at least two decisions")
+        decision_ids = [text(item.get("decision_id")) for item in decisions]
+        if any(not re.fullmatch(DECISION_ID_PATTERN, item) for item in decision_ids):
+            errors.append(f"{label}: every bundled decision must have a valid decision_id")
+        if len(set(decision_ids)) != len(decision_ids):
+            errors.append(f"{label}: bundled decision IDs must be unique")
+        if set(decision_ids) != decision_ids_for_stage(stage, " ".join(decision_ids)):
+            errors.append(f"{label}: every bundled decision must belong to stage {stage}")
+        for item in decisions:
+            decision_id = text(item.get("decision_id")) or "<missing>"
+            for field in ["decision_key", "recommendation", "alternatives", "impact"]:
+                if len(text(item.get(field))) < 8:
+                    errors.append(f"{label}: {decision_id}.{field} is incomplete")
+            if item.get("batch_eligible") is not True:
+                errors.append(f"{label}: {decision_id}.batch_eligible must be true")
+        prompt_snapshot = text(doc.get("prompt_snapshot"))
+        expected_prompt_hash = hashlib.sha256((prompt_snapshot.rstrip() + "\n").encode("utf-8")).hexdigest()
+        if len(prompt_snapshot) < 80 or text(doc.get("prompt_hash")) != expected_prompt_hash:
+            errors.append(f"{label}: prompt_snapshot/prompt_hash must seal the complete displayed decision bundle")
+        if text(doc.get("response_scope")) != "all-listed":
+            errors.append(f"{label}: response_scope must be all-listed")
+        if not explicit_bundle_confirmation(text(doc.get("user_response"))):
+            errors.append(f"{label}: user_response must affirmatively confirm all listed decisions without exceptions")
+        if text(doc.get("status")) != "locked" or not ISO_TIMESTAMP_RE.fullmatch(text(doc.get("decided_at"))):
+            errors.append(f"{label}: status must be locked and decided_at must be an ISO-8601 timestamp")
+        expected_receipt = stable_json_digest({key: value for key, value in doc.items() if key != "receipt_hash"})
+        if text(doc.get("receipt_hash")) != expected_receipt:
+            errors.append(f"{label}: receipt_hash is forged or stale")
+        if not errors or not any(error.startswith(f"{label}:") for error in errors):
+            accepted.update(decision_ids)
+    return accepted, errors
+
+
+def has_human_decision_record(
+    decision_id: str,
+    decision_doc: str,
+    interaction: str,
+    bundled_decision_ids: set[str] | None = None,
+) -> bool:
+    if decision_id in (bundled_decision_ids or set()):
+        return True
     row_texts: list[str] = []
     for row in markdown_table_dicts(interaction):
         if decision_id in " ".join(row.values()):
@@ -6269,6 +6711,11 @@ def validate_human_decision_records(model: WorkflowModel, stage: str) -> list[st
     human_mode = human_decision_participation_enabled(combined + "\n" + flatten_text(model.workflow))
     if human_mode and not interaction:
         errors.append("human-decision-participation is enabled but User Decision Interaction ledger is missing")
+    bundled_by_stage: dict[str, set[str]] = {}
+    for stage_name in (sorted(HUMAN_DECISION_REQUIRED_STAGES) if stage == "all" else [stage]):
+        bundled_ids, bundle_errors = human_decision_bundle_records(model.change_dir, stage_name)
+        bundled_by_stage[stage_name] = bundled_ids
+        errors.extend(bundle_errors)
     if interaction:
         required_columns = [
             "Stage",
@@ -6285,8 +6732,12 @@ def validate_human_decision_records(model: WorkflowModel, stage: str) -> list[st
         for col in required_columns:
             if col.lower() not in interaction.lower():
                 errors.append(f"User Decision Interaction must include column {col}")
-        if re.search(r"batch|批量|以上.*都|all agreed|all approved|一并确认", interaction, re.IGNORECASE):
-            errors.append("User Decision Interaction must not close multiple decisions with a batched confirmation")
+        if re.search(r"batch|批量|以上.*都|all agreed|all approved|一并确认", interaction, re.IGNORECASE) and not any(
+            bundled_by_stage.values()
+        ):
+            errors.append(
+                "User Decision Interaction may batch decisions only through a valid decision-bundles/HDB-xxx.yaml receipt"
+            )
     stages = sorted(HUMAN_DECISION_REQUIRED_STAGES) if stage == "all" else [stage]
     stage_status = as_dict(model.workflow.get("stage_status"))
     for stage_name in stages:
@@ -6320,9 +6771,14 @@ def validate_human_decision_records(model: WorkflowModel, stage: str) -> list[st
         for decision_id in sorted(decision_ids):
             if prefixes and not any(decision_id.startswith(prefix) for prefix in prefixes) and not human_mode:
                 continue
-            if not has_human_decision_record(decision_id, decision_doc, interaction):
+            if not has_human_decision_record(
+                decision_id,
+                decision_doc,
+                interaction,
+                bundled_by_stage.get(stage_name),
+            ):
                 errors.append(
-                    f"{decision_id}: requires one-by-one Human Decision Prompt record with prompt, user response, final status, and decided-at timestamp"
+                    f"{decision_id}: requires an individual Human Decision Prompt record or a valid decision bundle receipt"
                 )
     return errors
 
@@ -7860,12 +8316,30 @@ def validate_multi_perspective_review(model: WorkflowModel, stage: str) -> list[
         required_count = int(scope.get("required_reviewer_count"))
     except Exception:
         required_count = -1
-    if required_count <= 0:
-        errors.append("multi-perspective-review: review_scope.required_reviewer_count must be greater than 0")
-    if stage == "task-planning" and required_count > 2:
-        errors.append("multi-perspective-review: task-planning stage-level review must not exceed 2 reviewers")
-    if required_count > 5:
-        errors.append("multi-perspective-review: stage-level review must not exceed 5 reviewers")
+    review_kind = text(scope.get("review_kind")) or "initial"
+    if review_kind not in {"initial", "semantic-repair", "projection-repair", "format-repair"}:
+        errors.append(f"multi-perspective-review: unsupported review_scope.review_kind {review_kind!r}")
+    policy = as_dict(REVIEW_POLICY.get(stage))
+    minimum = int(policy.get("initial_min", 1)) if review_kind == "initial" else int(policy.get("repair_min", 1))
+    maximum = int(policy.get("max", 5))
+    if required_count < minimum:
+        errors.append(
+            f"multi-perspective-review: {review_kind} requires at least {minimum} reviewer(s), got {required_count}"
+        )
+    if required_count > maximum:
+        errors.append(
+            f"multi-perspective-review: stage policy allows at most {maximum} reviewer(s), got {required_count}"
+        )
+    if review_kind != "initial":
+        repair_context = as_dict(review_doc.get("repair_context"))
+        if len(text(repair_context.get("previous_review_ref"))) < 8:
+            errors.append("multi-perspective-review: repair_context.previous_review_ref is required for repair review")
+        if not meaningful_list(repair_context.get("triggering_findings"), min_chars=4):
+            errors.append("multi-perspective-review: repair_context.triggering_findings is required for repair review")
+        if not meaningful_list(repair_context.get("changed_artifacts"), min_chars=4):
+            errors.append("multi-perspective-review: repair_context.changed_artifacts is required for repair review")
+        if len(text(repair_context.get("narrowed_review_reason"))) < 12:
+            errors.append("multi-perspective-review: repair_context.narrowed_review_reason must justify narrowed perspectives")
 
     packet = as_dict(review_doc.get("frozen_input_packet"))
     if not isinstance(packet.get("frozen_artifacts"), list) or not packet.get("frozen_artifacts"):
@@ -9277,6 +9751,7 @@ def issue_stage_receipt(change_dir: Path, stage: str) -> int:
         "stage_passed",
         {"stage": stage, "receipt_hash": receipt["receipt_hash"]},
     )
+    auto_resolve_backflows(change_dir, stage)
     print(f"Stage {stage} passed and receipt written")
     return 0
 
@@ -9354,6 +9829,7 @@ def mark_stage_na(
         "stage_marked_na",
         {"stage": stage, "decision_id": decision_id, "receipt_hash": receipt["receipt_hash"]},
     )
+    auto_resolve_backflows(change_dir, stage)
     print(f"Stage {stage} marked not_applicable with a verified receipt")
     return 0
 
@@ -9394,8 +9870,41 @@ def validate_workflow_defects_doc(
         if "machine" not in text(defect.get("promotion_target")).lower() and "test" not in text(defect.get("promotion_target")).lower() and ".yaml" not in text(defect.get("promotion_target")):
             errors.append(f"{path}: {defect_id}.promotion_target must name a machine rule or test target")
         status = text(defect.get("status")).lower()
-        if status not in {"open", "promoted", "closed"}:
-            errors.append(f"{path}: {defect_id}.status must be open/promoted/closed")
+        if status not in {"open", "locally-repaired", "promoted", "closed"}:
+            errors.append(f"{path}: {defect_id}.status must be open/locally-repaired/promoted/closed")
+        if status == "locally-repaired":
+            evidence = as_dict(defect.get("local_repair_evidence"))
+            for field in [
+                "artifact_hashes", "validator_commands", "validator_results",
+                "repaired_at", "repair_stage", "repair_hash",
+            ]:
+                if not nonempty(evidence.get(field)):
+                    errors.append(f"{path}: {defect_id}.local_repair_evidence.{field} is required")
+            for rel, recorded_hash in as_dict(evidence.get("artifact_hashes")).items():
+                artifact = path.parent / text(rel)
+                if not artifact.is_file():
+                    errors.append(f"{path}: {defect_id} locally repaired artifact is missing: {rel}")
+                elif text(recorded_hash) != sha256_file(artifact):
+                    errors.append(f"{path}: {defect_id} local repair evidence is stale after artifact edit: {rel}")
+            commands = [text(item) for item in as_list(evidence.get("validator_commands"))]
+            results = [as_dict(item) for item in as_list(evidence.get("validator_results"))]
+            if len(results) != len(commands):
+                errors.append(f"{path}: {defect_id} local repair must record one validator result per command")
+            for index, result in enumerate(results):
+                expected_command = commands[index] if index < len(commands) else ""
+                if text(result.get("command")) != expected_command:
+                    errors.append(f"{path}: {defect_id} validator result {index + 1} command is stale")
+                if result.get("exit_code") != 0:
+                    errors.append(f"{path}: {defect_id} validator result {index + 1} did not pass")
+                if not re.fullmatch(r"[0-9a-f]{64}", text(result.get("output_sha256"))):
+                    errors.append(f"{path}: {defect_id} validator result {index + 1} output digest is invalid")
+                if not ISO_TIMESTAMP_RE.fullmatch(text(result.get("ran_at"))):
+                    errors.append(f"{path}: {defect_id} validator result {index + 1} ran_at must be ISO-8601")
+            expected_repair_hash = stable_json_digest(
+                {key: value for key, value in evidence.items() if key != "repair_hash"}
+            )
+            if text(evidence.get("repair_hash")) != expected_repair_hash:
+                errors.append(f"{path}: {defect_id}.local_repair_evidence.repair_hash is forged or stale")
         if status in {"promoted", "closed"}:
             if not nonempty(defect.get("runtime_version_fixed")):
                 errors.append(f"{path}: {defect_id}.runtime_version_fixed is required after promotion")
@@ -9461,9 +9970,9 @@ def validate_workflow_defects_doc(
                                 errors.append(f"{path}: {defect_id} promoted runtime component was removed: {component_name}")
                             elif text(evidence.get("test_id")) not in current_path.read_text(encoding="utf-8", errors="replace"):
                                 errors.append(f"{path}: {defect_id} promoted rule/test ID was removed from current component: {component_name}")
-        elif require_promoted:
+        elif status == "open" and require_promoted:
             errors.append(
-                f"{path}: {defect_id} remains open; promote the machine rule/regression test before passing another gate"
+                f"{path}: {defect_id} remains open; repair the current change and run repair-late-defect before passing another gate"
             )
     return errors
 
@@ -9527,6 +10036,7 @@ def record_late_defect(
                     "status": "open",
                 }
             )
+            defect.pop("local_repair_evidence", None)
             defect.pop("promotion_evidence", None)
             defect.pop("promotion_receipt_hash", None)
             validation_errors = validate_workflow_defects_doc(path, candidate, False)
@@ -9575,6 +10085,122 @@ def record_late_defect(
     return 0
 
 
+def repair_late_defect(
+    change_dir: Path,
+    defect_id: str,
+    repair_stage: str,
+    artifact_paths: list[str],
+    validator_commands: list[str],
+) -> int:
+    if yaml is None:
+        print("PyYAML is required for workflowctl repair-late-defect", file=sys.stderr)
+        return 2
+    path = change_dir / "workflow-defects.yaml"
+    doc = as_dict(load_yaml(path))
+    defects = as_dict(doc.get("defects"))
+    defect = as_dict(defects.get(defect_id))
+    errors: list[str] = []
+    if not defect:
+        errors.append(f"{defect_id}: defect does not exist")
+    if text(defect.get("status")) != "open":
+        errors.append(f"{defect_id}: repair-late-defect requires status=open")
+    if repair_stage not in STAGE_CONSTRUCTION_STAGES:
+        errors.append(f"{defect_id}: repair-stage must be a construction stage")
+    if repair_stage != text(defect.get("should_have_caught_stage")):
+        errors.append(
+            f"{defect_id}: repair-stage must equal should_have_caught_stage={defect.get('should_have_caught_stage')}"
+        )
+    artifact_hashes: dict[str, str] = {}
+    for rel in artifact_paths:
+        candidate = (change_dir / rel).resolve()
+        try:
+            normalized = candidate.relative_to(change_dir.resolve()).as_posix()
+        except ValueError:
+            errors.append(f"{defect_id}: artifact path escapes change dir: {rel}")
+            continue
+        if not candidate.is_file():
+            errors.append(f"{defect_id}: repaired artifact is missing: {rel}")
+            continue
+        artifact_hashes[normalized] = sha256_file(candidate)
+    if not artifact_hashes:
+        errors.append(f"{defect_id}: at least one repaired artifact is required")
+    affected_raw = text(defect.get("affected_artifact")).split("#", 1)[0].strip()
+    if affected_raw:
+        affected_path = Path(affected_raw).expanduser()
+        if not affected_path.is_absolute():
+            affected_path = (change_dir / affected_path).resolve()
+        try:
+            affected_rel = affected_path.relative_to(change_dir.resolve()).as_posix()
+        except ValueError:
+            affected_rel = ""
+        if affected_rel and affected_rel not in artifact_hashes:
+            errors.append(
+                f"{defect_id}: repaired artifacts must include affected_artifact {affected_rel}"
+            )
+    commands = [item.strip() for item in validator_commands if item.strip()]
+    if not commands or any(len(item) < 12 for item in commands):
+        errors.append(f"{defect_id}: concrete validator-command evidence is required")
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+    validator_results: list[dict[str, Any]] = []
+    command_cwd = git_root_for(change_dir) or change_dir
+    for command in commands:
+        try:
+            completed = subprocess.run(
+                command,
+                shell=True,
+                cwd=command_cwd,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=600,
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"ERROR: {defect_id}: validator command exceeded 600 seconds: {command}",
+                file=sys.stderr,
+            )
+            return 1
+        output = (completed.stdout or "") + "\n" + (completed.stderr or "")
+        validator_results.append(
+            {
+                "command": command,
+                "exit_code": completed.returncode,
+                "output_sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
+                "ran_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            }
+        )
+        if completed.returncode != 0:
+            print(
+                f"ERROR: {defect_id}: validator command failed with exit {completed.returncode}: {command}",
+                file=sys.stderr,
+            )
+            return 1
+    evidence = {
+        "artifact_hashes": artifact_hashes,
+        "validator_commands": commands,
+        "validator_results": validator_results,
+        "repaired_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "repair_stage": repair_stage,
+        "promotion_deferred_to_methodology_maintenance": True,
+    }
+    evidence["repair_hash"] = stable_json_digest(evidence)
+    defect["status"] = "locally-repaired"
+    defect["local_repair_evidence"] = evidence
+    defects[defect_id] = defect
+    doc["defects"] = defects
+    write_yaml(path, doc)
+    append_workflow_event(
+        change_dir,
+        "late_defect_locally_repaired",
+        {"defect_id": defect_id, "repair_stage": repair_stage, "repair_hash": evidence["repair_hash"]},
+    )
+    print(f"Late defect {defect_id} locally repaired; global promotion deferred")
+    return 0
+
+
 def promote_late_defect(
     change_dir: Path,
     defect_id: str,
@@ -9591,8 +10217,8 @@ def promote_late_defect(
     if not defect:
         print(f"ERROR: {defect_id}: missing from workflow-defects.yaml", file=sys.stderr)
         return 1
-    if text(defect.get("status")).lower() != "open":
-        print(f"ERROR: {defect_id}: only open defects can be promoted", file=sys.stderr)
+    if text(defect.get("status")).lower() not in {"open", "locally-repaired"}:
+        print(f"ERROR: {defect_id}: only open or locally-repaired defects can be promoted", file=sys.stderr)
         return 1
     root = Path(__file__).resolve().parent.parent
     resolved: list[Path] = []
@@ -10922,11 +11548,19 @@ def main() -> int:
     prepare_stage_parser.add_argument("stage", choices=sorted(STAGE_CONSTRUCTION_STAGES))
     prepare_stage_parser.add_argument("change_dir", type=Path)
 
+    verify_resume_parser = sub.add_parser("verify-resume")
+    verify_resume_parser.add_argument("change_dir", type=Path)
+
     reopen_stage_parser = sub.add_parser("reopen-stage")
     reopen_stage_parser.add_argument("stage", choices=sorted(STAGE_CONSTRUCTION_STAGES))
     reopen_stage_parser.add_argument("change_dir", type=Path)
     reopen_stage_parser.add_argument("--backflow-id", required=True)
     reopen_stage_parser.add_argument("--reason", required=True)
+
+    resolve_backflow_parser = sub.add_parser("resolve-backflow")
+    resolve_backflow_parser.add_argument("change_dir", type=Path)
+    resolve_backflow_parser.add_argument("backflow_id")
+    resolve_backflow_parser.add_argument("--resolution", required=True)
 
     migrate_runtime_parser = sub.add_parser("migrate-workflow-runtime")
     migrate_runtime_parser.add_argument("change_dir", type=Path)
@@ -10952,6 +11586,13 @@ def main() -> int:
     late_defect_parser.add_argument("--affected-artifact", required=True)
     late_defect_parser.add_argument("--repair-action", required=True)
     late_defect_parser.add_argument("--promotion-target", required=True)
+
+    repair_defect_parser = sub.add_parser("repair-late-defect")
+    repair_defect_parser.add_argument("change_dir", type=Path)
+    repair_defect_parser.add_argument("defect_id")
+    repair_defect_parser.add_argument("--repair-stage", required=True)
+    repair_defect_parser.add_argument("--artifact-path", action="append", required=True)
+    repair_defect_parser.add_argument("--validator-command", action="append", required=True)
 
     promote_defect_parser = sub.add_parser("promote-late-defect")
     promote_defect_parser.add_argument("change_dir", type=Path)
@@ -11058,10 +11699,22 @@ def main() -> int:
         )
     if args.command == "promote-late-defect":
         return promote_late_defect(args.change_dir, args.defect_id, args.target_path, args.test_id)
+    if args.command == "repair-late-defect":
+        return repair_late_defect(
+            args.change_dir,
+            args.defect_id,
+            args.repair_stage,
+            args.artifact_path,
+            args.validator_command,
+        )
     if args.command == "prepare-stage":
         return prepare_stage(args.change_dir, args.stage)
+    if args.command == "verify-resume":
+        return verify_resume(args.change_dir)
     if args.command == "reopen-stage":
         return reopen_stage(args.change_dir, args.stage, args.backflow_id, args.reason)
+    if args.command == "resolve-backflow":
+        return resolve_backflow(args.change_dir, args.backflow_id, args.resolution)
     if args.command == "validate-obligation":
         return validate_obligation(args.change_dir, args.stage, args.obligation_id, args.not_applicable)
     if args.command == "validate-stage-construction":

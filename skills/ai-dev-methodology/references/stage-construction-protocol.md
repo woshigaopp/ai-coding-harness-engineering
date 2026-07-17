@@ -68,7 +68,7 @@ context pack 不是长度门禁。每个 pack 必须包含：当前 source artif
 python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py validate-obligation <stage> <obligation-id> specs/changes/<change-id>
 ```
 
-该命令通过后写入 row-level validation receipt。closure 或引用 artifact 后续变化会使 receipt stale。
+该命令通过后写入 row-level validation receipt。`file.md#Section` 只固定该 section；typed obligation 进一步只固定包含自身 `object_id` 的结构化行。closure 或该对象的语义内容变化会使 receipt stale，无关 section/row 和 presentation-only Markdown 变化不会扩大失效范围。canonical reference 缺 section 时直接失败，不能退化成整文件 hash。
 
 阶段末运行：
 
@@ -123,7 +123,7 @@ ledger 中的 `rule_id`、title、phase、earliest/repair stage、N/A 权限、r
 | Readonly review | 漏 surface、错误 owner、错误模块边界、证据不足或真实语义冲突 | 主 agent 裁决并回流；不得让 reviewer 修改 artifact |
 | Stage receipt | 全量 validator、rubric、reviewer 和 artifact hash | 只有 `pass-stage` 可以写 `passed` |
 
-最终 gate 如果发现缺字段、缺 owner、缺 verification、非法状态、已知 trigger 未投影等机械问题，必须用 `record-late-defect` 写入 `workflow-defects.yaml`。相同 failure signature 递增 recurrence count，不得复制新行；每行必须声明 should-have-caught stage、repair action 和 machine-rule/test promotion target。最终 gate 应主要发现跨对象一致性和新的语义问题。
+最终 gate 如果发现缺字段、缺 owner、缺 verification、非法状态、已知 trigger 未投影等机械问题，必须用 `record-late-defect` 写入 `workflow-defects.yaml`。相同 failure signature 递增 recurrence count，不得复制新行；每行必须声明 should-have-caught stage、repair action 和 machine-rule/test promotion target。当前产品 workflow 修 artifact 后用 `repair-late-defect` 固定 change-local artifact hashes，并实际执行 validator commands、固定 exit code/time/output digest，状态变成 `locally-repaired`；不得在产品 workflow 中修改全局 skill/runtime。promotion 留给独立 methodology maintenance/retrospective。最终 gate 应主要发现跨对象一致性和新的语义问题。
 
 ## 兼容与回流
 
@@ -135,7 +135,7 @@ workflow:
   profile: full
   stage_construction_protocol: stage-construction-v1
   runtime:
-    version: contextpack-runtime-2026.07.14.4
+    version: <copied from workflow-state-contextpack.yaml>
     manifest_sha256: <manifest SHA-256>
 ```
 
@@ -150,6 +150,8 @@ workflow:
 - trigger scan 的 path、matched pattern 或 excerpt 改变；即使 obligation 集合未变化，也必须重新确认输入。
 - obligation closure 改变。
 - closure 引用的 canonical artifact 内容改变。
+
+`external-capability-research.md` 是 AIP-owned synthesis，不进入 source-intake receipt；修改其 schema 或叙述只能失效 AIP 及其下游。source-intake receipt 只封存原始 source ledger 和不可变 identity。
 
 发生上游语义回流时，先按既有 Backflow Invalidation Matrix 失效 DEC/C/VER/T，再重新运行对应阶段 `prepare-stage`。stage-construction ledger 不是新的 source of truth；它只记录 canonical artifacts 如何满足 machine contract。
 

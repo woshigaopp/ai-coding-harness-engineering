@@ -43,6 +43,22 @@ construction_stages:
   - mock-acceptance
   - product-acceptance
 
+review_policy:
+  source-intake: {required: false, initial_min: 0, repair_min: 0, max: 0}
+  prd: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  aip: {required: true, initial_min: 3, repair_min: 1, max: 5}
+  readiness: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  design: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  archaeology: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  migration: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  frontend-contract: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  contract: {required: true, initial_min: 3, repair_min: 1, max: 5}
+  verification: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  task-planning: {required: true, initial_min: 2, repair_min: 1, max: 2}
+  pre-execution: {required: true, initial_min: 2, repair_min: 1, max: 2}
+  mock-acceptance: {required: true, initial_min: 2, repair_min: 1, max: 4}
+  product-acceptance: {required: true, initial_min: 2, repair_min: 1, max: 4}
+
 plan_snapshot_stages:
   - aip
   - readiness

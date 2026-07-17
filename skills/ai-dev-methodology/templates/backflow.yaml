@@ -6,6 +6,7 @@ triggers:
   #   category: frontend-contract-gap
   #   earliest_missing_stage: frontend-contract
   #   required_backflow: ""
+  #   resolution_stage: frontend-contract
   #   # open/blocked while affected artifacts are invalid. Set resolved/closed
   #   # only after affected DEC/C/VER/T artifacts are repaired and ready for
   #   # workflowctl.py reseal-execution-backflow.

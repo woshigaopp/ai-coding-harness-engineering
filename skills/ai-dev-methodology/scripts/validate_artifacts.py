@@ -442,20 +442,12 @@ STATEFUL_MATRIX_COLUMNS = [
 SUPERSEDED_REF_RE = re.compile(rf"\b(?:{DECISION_ID_PATTERN}|C-\d{{3}}|VER-\d{{3}}|T\d{{3}})\b")
 VALID_STAGE_STATUS = set(WORKFLOW_STATE_MACHINE.get("valid_stage_statuses", []))
 
+REVIEW_POLICY = {
+    str(stage): dict(policy) if isinstance(policy, dict) else {}
+    for stage, policy in dict(WORKFLOW_STATE_MACHINE.get("review_policy", {})).items()
+}
 MULTI_PERSPECTIVE_REVIEW_STAGES = {
-    "prd",
-    "readiness",
-    "aip",
-    "design",
-    "archaeology",
-    "migration",
-    "frontend-contract",
-    "contract",
-    "verification",
-    "task-planning",
-    "pre-execution",
-    "mock-acceptance",
-    "product-acceptance",
+    stage for stage, policy in REVIEW_POLICY.items() if policy.get("required") is True
 }
 MULTI_PERSPECTIVE_STAGE_ALIASES = {
     "requirement-readiness": "readiness",
@@ -529,9 +521,9 @@ HUMAN_DECISION_RESPONSE_RE = re.compile(
 )
 HUMAN_DECISION_PROMPT_RE = re.compile(r"\b(?:HDP-\d{3}|Human Decision Prompt|Prompt ID|prompt summary|决策提示|逐条)\b", re.IGNORECASE)
 HUMAN_DECISION_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}|decided at|confirmed at|更新时间|确认时间", re.IGNORECASE)
+ISO_TIMESTAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})")
 
 OPTIONAL_RECEIPT_ARTIFACTS = {
-    "source-intake": ["external-capability-research.md"],
     "prd": ["decision-surface-discovery.md"],
     "aip": ["decision-surface-discovery.md", "external-capability-research.md", "mechanism-design-model.md"],
     "readiness": ["decision-surface-discovery.md", "external-capability-research.md", "mechanism-design-model.md"],
@@ -1217,6 +1209,12 @@ def artifact_digest_map(change_dir: Path, stage: str) -> dict[str, str]:
                 if rel == "workflow-defects.yaml"
                 else artifact_receipt_digest(path, rel)
             )
+    if stage in HUMAN_DECISION_REQUIRED_STAGES:
+        for path in sorted((change_dir / "decision-bundles").glob("*.yaml")):
+            if str(read_yaml(path).get("stage", "")).strip() != stage:
+                continue
+            rel = path.relative_to(change_dir).as_posix()
+            digests[rel] = sha256_file(path)
     return digests
 
 
@@ -1295,7 +1293,7 @@ def markdown_table_values(markdown: str) -> dict[str, str]:
         stripped = line.strip()
         if not stripped.startswith("|") or not stripped.endswith("|"):
             continue
-        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        cells = split_markdown_table_row(stripped)
         if len(cells) < 2:
             continue
         if all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells):
@@ -1329,7 +1327,10 @@ def validate_workdir_identity(change_dir: Path, workflow_state: dict) -> list[st
     body = read(path)
     identity_body = re.split(r"^##+\s+Resume Verification\b", body, maxsplit=1, flags=re.MULTILINE)[0]
     values = markdown_table_values(identity_body)
-    required = ["worktree path", "change dir absolute path", "change id", "branch name", "base commit", "git top level"]
+    required = [
+        "worktree path", "change dir absolute path", "change id", "branch name",
+        "base branch", "base commit", "base source mode", "git top level",
+    ]
     for key in required:
         if not text(values.get(key)):
             errors.append(f"{path}: Canonical Workdir missing {key}")
@@ -1354,6 +1355,21 @@ def validate_workdir_identity(change_dir: Path, workflow_state: dict) -> list[st
     recorded_branch = text(values.get("branch name"))
     if recorded_branch and actual_branch and recorded_branch != actual_branch:
         errors.append(f"{path}: branch mismatch; expected {recorded_branch}, actual {actual_branch}")
+
+    recorded_base = text(values.get("base commit"))
+    base_branch = text(values.get("base branch"))
+    base_source_mode = text(values.get("base source mode"))
+    if base_source_mode not in {"fetched-remote", "pinned-commit", "local-only"}:
+        errors.append(f"{path}: base source mode is invalid: {base_source_mode or '<empty>'}")
+    if base_branch.startswith("origin/"):
+        if base_source_mode != "fetched-remote":
+            errors.append(f"{path}: origin base requires base source mode=fetched-remote")
+        if text(values.get("remote oid")) != recorded_base:
+            errors.append(f"{path}: Remote OID must equal Base commit for an origin base")
+        if not ISO_TIMESTAMP_RE.fullmatch(text(values.get("remote fetched at"))):
+            errors.append(f"{path}: Remote fetched at must be an ISO-8601 timestamp for an origin base")
+        if "git fetch" not in text(values.get("fetch command evidence")):
+            errors.append(f"{path}: Fetch command evidence must record git fetch for an origin base")
 
     workflow = workflow_state.get("workflow", {}) if isinstance(workflow_state.get("workflow"), dict) else {}
     for state_key, identity_key in [
@@ -1660,73 +1676,110 @@ def section(markdown: str, name: str) -> str:
     return markdown[start:end]
 
 
+def split_markdown_table_row(line: str) -> list[str]:
+    value = line.strip()
+    if value.startswith("|"):
+        value = value[1:]
+    if value.endswith("|") and not value.endswith(r"\|"):
+        value = value[:-1]
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    in_code = False
+    for char in value:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            current.append(char)
+            continue
+        if char == "`":
+            in_code = not in_code
+            current.append(char)
+            continue
+        if char == "|" and not in_code:
+            cells.append("".join(current).strip().strip("`"))
+            current = []
+            continue
+        current.append(char)
+    if escaped:
+        current.append("\\")
+    cells.append("".join(current).strip().strip("`"))
+    return cells
+
+
+def markdown_tables(section_text: str) -> list[tuple[list[str], list[list[str]]]]:
+    lines = section_text.splitlines()
+    tables: list[tuple[list[str], list[list[str]]]] = []
+    index = 0
+    while index + 1 < len(lines):
+        header_line = lines[index].strip()
+        separator_line = lines[index + 1].strip()
+        if not (header_line.startswith("|") and header_line.endswith("|")):
+            index += 1
+            continue
+        if not (separator_line.startswith("|") and separator_line.endswith("|")):
+            index += 1
+            continue
+        headers = split_markdown_table_row(header_line)
+        separators = split_markdown_table_row(separator_line)
+        if len(headers) != len(separators) or not separators or not all(
+            re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in separators
+        ):
+            index += 1
+            continue
+        rows: list[list[str]] = []
+        index += 2
+        while index < len(lines):
+            data_line = lines[index].strip()
+            if not (data_line.startswith("|") and data_line.endswith("|")):
+                break
+            rows.append(split_markdown_table_row(data_line))
+            index += 1
+        tables.append((headers, rows))
+    return tables
+
+
 def table_rows(section_text: str) -> list[list[str]]:
     rows: list[list[str]] = []
-    for raw in section_text.splitlines():
-        line = raw.strip()
-        if not line.startswith("|") or not line.endswith("|"):
-            continue
-        if re.fullmatch(r"\|[\s:\-|]+\|", line):
-            continue
-        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
-        rows.append(cells)
+    for headers, data in markdown_tables(section_text):
+        rows.append(headers)
+        rows.extend(data)
     return rows
 
 
 def table_dicts(section_text: str) -> list[dict[str, str]]:
-    rows = table_rows(section_text)
-    if not rows:
-        return []
-    header_index = 0
-    for idx, row in enumerate(rows):
-        joined = " ".join(cell.lower() for cell in row)
-        if (
-            "action id" in joined
-            or "surface" in joined
-            or "form/step" in joined
-            or "user task id" in joined
-            or "contract" in joined
-            or "edge id" in joined
-            or "txxx" in joined
-            or "candidate rows" in joined
-        ):
-            header_index = idx
-            break
-    headers = [cell.strip() for cell in rows[header_index]]
     data: list[dict[str, str]] = []
-    for row in rows[header_index + 1:]:
-        if len(row) < len(headers):
-            row = row + [""] * (len(headers) - len(row))
-        mapped = {headers[idx]: row[idx].strip() for idx in range(len(headers))}
-        if any(value for value in mapped.values()):
-            data.append(mapped)
+    for raw_headers, rows in markdown_tables(section_text):
+        headers = [cell.strip() for cell in raw_headers]
+        for row in rows:
+            if len(row) < len(headers):
+                row = row + [""] * (len(headers) - len(row))
+            mapped = {headers[idx]: row[idx].strip() for idx in range(len(headers))}
+            if any(value for value in mapped.values()):
+                data.append(mapped)
     return data
 
 
 def markdown_table_column_count_errors(section_text: str, columns: list[str], artifact: str) -> list[str]:
-    rows = table_rows(section_text)
-    if not rows:
-        return []
     normalized_columns = {re.sub(r"[^a-z0-9]+", "", column.lower()) for column in columns}
-    header_index: int | None = None
-    for idx, row in enumerate(rows):
-        normalized_row = {re.sub(r"[^a-z0-9]+", "", cell.lower()) for cell in row}
-        if normalized_columns <= normalized_row:
-            header_index = idx
-            break
-    if header_index is None:
-        return []
-    expected = len(rows[header_index])
     errors: list[str] = []
-    for row_number, row in enumerate(rows[header_index + 1:], start=1):
-        if not any(cell.strip() for cell in row):
+    for headers, rows in markdown_tables(section_text):
+        normalized_row = {re.sub(r"[^a-z0-9]+", "", cell.lower()) for cell in headers}
+        if not normalized_columns <= normalized_row:
             continue
-        if len(row) != expected:
-            snippet = " | ".join(row[: min(len(row), 6)])
-            errors.append(
-                f"{artifact}: table row {row_number} has {len(row)} cells but header has {expected}; "
-                f"this usually means a Contract Executable Obligation Matrix column shifted: {snippet}"
-            )
+        expected = len(headers)
+        for row_number, row in enumerate(rows, start=1):
+            if not any(cell.strip() for cell in row):
+                continue
+            if len(row) != expected:
+                snippet = " | ".join(row[: min(len(row), 6)])
+                errors.append(
+                    f"{artifact}: table row {row_number} has {len(row)} cells but header has {expected}; "
+                    f"this usually means a Contract Executable Obligation Matrix column shifted: {snippet}"
+                )
     return errors
 
 
@@ -3609,7 +3662,88 @@ def decision_ids_for_stage(stage: str, text_value: str) -> set[str]:
     }
 
 
-def has_human_decision_record(decision_id: str, decision_doc: str, interaction: str) -> bool:
+def explicit_bundle_confirmation(value: str) -> bool:
+    response = re.sub(r"\s+", " ", value.strip())
+    if not response:
+        return False
+    if re.search(
+        r"(?:do\s+not|don't|not\s+(?:agree|approve|confirm)|disagree|except|only|"
+        r"不同意|不确认|不采用|拒绝|除.+外|仅(?:同意|确认|采用))",
+        response,
+        re.IGNORECASE,
+    ):
+        return False
+    affirmative = bool(re.search(r"confirm|agree|approve|同意|确认|采用", response, re.IGNORECASE))
+    complete_scope = bool(
+        re.search(r"all(?:[-\s]+listed)?|every|above|listed|全部|所有|以上|逐项", response, re.IGNORECASE)
+    )
+    return affirmative and complete_scope
+
+
+def human_decision_bundle_records(change_dir: Path, stage: str) -> tuple[set[str], list[str]]:
+    accepted: set[str] = set()
+    errors: list[str] = []
+    for path in sorted((change_dir / "decision-bundles").glob("*.yaml")):
+        doc = read_yaml(path)
+        label = path.relative_to(change_dir).as_posix()
+        if doc.get("schema_version") != 1:
+            errors.append(f"{label}: schema_version must be 1")
+            continue
+        bundle_id = str(doc.get("bundle_id", "")).strip()
+        if not re.fullmatch(r"HDB-\d{3}", bundle_id):
+            errors.append(f"{label}: bundle_id must match HDB-xxx")
+        elif path.stem != bundle_id:
+            errors.append(f"{label}: filename must match bundle_id {bundle_id}")
+        bundle_stage = str(doc.get("stage", "")).strip()
+        if bundle_stage not in HUMAN_DECISION_REQUIRED_STAGES:
+            errors.append(f"{label}: stage must name a human-decision stage")
+            continue
+        if bundle_stage != stage:
+            continue
+        decisions = [item for item in doc.get("decisions", []) if isinstance(item, dict)] if isinstance(doc.get("decisions"), list) else []
+        if len(decisions) < 2:
+            errors.append(f"{label}: a decision bundle must contain at least two decisions")
+        decision_ids = [str(item.get("decision_id", "")).strip() for item in decisions]
+        if any(not re.fullmatch(DECISION_ID_PATTERN, item) for item in decision_ids):
+            errors.append(f"{label}: every bundled decision must have a valid decision_id")
+        if len(set(decision_ids)) != len(decision_ids):
+            errors.append(f"{label}: bundled decision IDs must be unique")
+        if set(decision_ids) != decision_ids_for_stage(stage, " ".join(decision_ids)):
+            errors.append(f"{label}: every bundled decision must belong to stage {stage}")
+        for item in decisions:
+            decision_id = str(item.get("decision_id", "")).strip() or "<missing>"
+            for field in ["decision_key", "recommendation", "alternatives", "impact"]:
+                if len(str(item.get(field, "")).strip()) < 8:
+                    errors.append(f"{label}: {decision_id}.{field} is incomplete")
+            if item.get("batch_eligible") is not True:
+                errors.append(f"{label}: {decision_id}.batch_eligible must be true")
+        prompt_snapshot = str(doc.get("prompt_snapshot", "")).strip()
+        expected_prompt_hash = hashlib.sha256((prompt_snapshot.rstrip() + "\n").encode("utf-8")).hexdigest()
+        if len(prompt_snapshot) < 80 or str(doc.get("prompt_hash", "")).strip() != expected_prompt_hash:
+            errors.append(f"{label}: prompt_snapshot/prompt_hash must seal the complete displayed decision bundle")
+        if str(doc.get("response_scope", "")).strip() != "all-listed":
+            errors.append(f"{label}: response_scope must be all-listed")
+        if not explicit_bundle_confirmation(str(doc.get("user_response", "")).strip()):
+            errors.append(f"{label}: user_response must affirmatively confirm all listed decisions without exceptions")
+        if str(doc.get("status", "")).strip() != "locked" or not ISO_TIMESTAMP_RE.fullmatch(
+            str(doc.get("decided_at", "")).strip()
+        ):
+            errors.append(f"{label}: status must be locked and decided_at must be an ISO-8601 timestamp")
+        if str(doc.get("receipt_hash", "")).strip() != canonical_receipt_hash(doc):
+            errors.append(f"{label}: receipt_hash is forged or stale")
+        if not any(error.startswith(f"{label}:") for error in errors):
+            accepted.update(decision_ids)
+    return accepted, errors
+
+
+def has_human_decision_record(
+    decision_id: str,
+    decision_doc: str,
+    interaction: str,
+    bundled_decision_ids: set[str] | None = None,
+) -> bool:
+    if decision_id in (bundled_decision_ids or set()):
+        return True
     row_texts: list[str] = []
     for row in table_dicts(interaction):
         if decision_id in " ".join(row.values()):
@@ -3643,6 +3777,11 @@ def validate_human_decision_records(change_dir: Path, stage: str, combined_text:
     stages = sorted(HUMAN_DECISION_REQUIRED_STAGES) if stage == "all" else [stage]
     interaction = user_decision_interaction_section(combined_text)
     human_mode = human_decision_participation_enabled(combined_text + "\n" + flatten_text(workflow_state))
+    bundled_by_stage: dict[str, set[str]] = {}
+    for stage_name in stages:
+        bundled_ids, bundle_errors = human_decision_bundle_records(change_dir, stage_name)
+        bundled_by_stage[stage_name] = bundled_ids
+        errors.extend(bundle_errors)
     if human_mode and not interaction:
         errors.append(f"{change_dir}: human-decision-participation is enabled but User Decision Interaction ledger is missing")
     if interaction:
@@ -3660,8 +3799,12 @@ def validate_human_decision_records(change_dir: Path, stage: str, combined_text:
         ]
         if not has_table_columns(interaction, required_columns):
             errors.append(f"{change_dir}: User Decision Interaction must include stage, decision id/key, prompt id/summary, recommendation, alternatives, user response, final status, and decided-at")
-        if re.search(r"batch|批量|以上.*都|all agreed|all approved|一并确认", interaction, re.IGNORECASE):
-            errors.append(f"{change_dir}: User Decision Interaction must not close multiple decisions with a batched confirmation")
+        if re.search(r"batch|批量|以上.*都|all agreed|all approved|一并确认", interaction, re.IGNORECASE) and not any(
+            bundled_by_stage.values()
+        ):
+            errors.append(
+                f"{change_dir}: batched confirmation requires a valid decision-bundles/HDB-xxx.yaml receipt"
+            )
     for stage_name in stages:
         decision_doc_path = decision_doc_for_stage(change_dir, stage_name)
         decision_doc = read(decision_doc_path)
@@ -3693,9 +3836,14 @@ def validate_human_decision_records(change_dir: Path, stage: str, combined_text:
         for decision_id in sorted(decision_ids):
             if prefixes and not any(decision_id.startswith(prefix) for prefix in prefixes) and not human_mode:
                 continue
-            if not has_human_decision_record(decision_id, decision_doc, interaction):
+            if not has_human_decision_record(
+                decision_id,
+                decision_doc,
+                interaction,
+                bundled_by_stage.get(stage_name),
+            ):
                 errors.append(
-                    f"{change_dir}: {decision_id} requires one-by-one Human Decision Prompt record with prompt, user response, final status, and decided-at timestamp"
+                    f"{change_dir}: {decision_id} requires an individual Human Decision Prompt record or a valid decision bundle receipt"
                 )
     return errors
 
@@ -6124,12 +6272,28 @@ def validate_multi_perspective_review(change_dir: Path, stage: str) -> list[str]
         required_count = int(scope.get("required_reviewer_count"))
     except Exception:
         required_count = -1
-    if required_count <= 0:
-        errors.append(f"{path}: review_scope.required_reviewer_count must be greater than 0")
-    if stage == "task-planning" and required_count > 2:
-        errors.append(f"{path}: task-planning stage-level review must not exceed 2 reviewers")
-    if required_count > 5:
-        errors.append(f"{path}: stage-level review must not exceed 5 reviewers")
+    review_kind = str(scope.get("review_kind", "")).strip() or "initial"
+    if review_kind not in {"initial", "semantic-repair", "projection-repair", "format-repair"}:
+        errors.append(f"{path}: unsupported review_scope.review_kind {review_kind!r}")
+    policy = REVIEW_POLICY.get(stage, {})
+    minimum = int(policy.get("initial_min", 1)) if review_kind == "initial" else int(policy.get("repair_min", 1))
+    maximum = int(policy.get("max", 5))
+    if required_count < minimum:
+        errors.append(f"{path}: {review_kind} requires at least {minimum} reviewer(s), got {required_count}")
+    if required_count > maximum:
+        errors.append(f"{path}: stage policy allows at most {maximum} reviewer(s), got {required_count}")
+    if review_kind != "initial":
+        repair_context = doc.get("repair_context", {}) if isinstance(doc.get("repair_context"), dict) else {}
+        if len(str(repair_context.get("previous_review_ref", "")).strip()) < 8:
+            errors.append(f"{path}: repair_context.previous_review_ref is required for repair review")
+        triggering = [str(item).strip() for item in repair_context.get("triggering_findings", [])] if isinstance(repair_context.get("triggering_findings"), list) else []
+        changed = [str(item).strip() for item in repair_context.get("changed_artifacts", [])] if isinstance(repair_context.get("changed_artifacts"), list) else []
+        if not any(len(item) >= 4 for item in triggering):
+            errors.append(f"{path}: repair_context.triggering_findings is required for repair review")
+        if not any(len(item) >= 4 for item in changed):
+            errors.append(f"{path}: repair_context.changed_artifacts is required for repair review")
+        if len(str(repair_context.get("narrowed_review_reason", "")).strip()) < 12:
+            errors.append(f"{path}: repair_context.narrowed_review_reason must justify narrowed perspectives")
 
     packet = doc.get("frozen_input_packet", {}) if isinstance(doc.get("frozen_input_packet"), dict) else {}
     if not isinstance(packet.get("frozen_artifacts"), list) or not packet.get("frozen_artifacts"):

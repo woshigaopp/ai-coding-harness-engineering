@@ -7,6 +7,7 @@ import ast
 import argparse
 import copy
 import contextlib
+import hashlib
 import importlib.util
 import inspect
 import io
@@ -757,6 +758,14 @@ def validate_aip_design_closure_reference() -> list[str]:
         for helper in ["validate_mechanism_design_closure", "validate_aip_narrative_materialization"]:
             if f"def {helper}" not in body:
                 errors.append(f"{path}: missing AIP design closure validator helper {helper}")
+    # SC-AIP-GLOBAL-COMPAT-001 regression: AIP construction must invoke the
+    # deterministic artifact checks before the readonly review packet is frozen.
+    contract_body = read(STAGE_CONSTRUCTION_CONTRACT)
+    workflowctl_body = read(WORKFLOWCTL)
+    if "SC-AIP-GLOBAL-COMPAT-001" not in contract_body:
+        errors.append(f"{STAGE_CONSTRUCTION_CONTRACT}: missing SC-AIP-GLOBAL-COMPAT-001")
+    if "validate_aip_construction_compatibility" not in workflowctl_body:
+        errors.append(f"{WORKFLOWCTL}: missing AIP construction compatibility hook")
     return errors
 
 
@@ -842,6 +851,33 @@ x
     artifact_mech_errors = artifact_validator.validate_mechanism_design_closure(Path("/tmp/aip-smoke"), internal_api_aip, "aip.md")
     if any("external mechanism row must reference" in error for error in artifact_mech_errors):
         errors.append(f"{ARTIFACT_VALIDATOR}: internal API locked N/A smoke incorrectly required external MECH/FACT/CONSTRAINT")
+    with tempfile.TemporaryDirectory() as tmp:
+        change_dir = Path(tmp) / "specs" / "changes" / "aip-global-compat-smoke"
+        change_dir.mkdir(parents=True)
+        (change_dir / "proposal.md").write_text("K8s external API architecture\n", encoding="utf-8")
+        (change_dir / "spec.md").write_text("REQ-001 requires Kubernetes runtime.\n", encoding="utf-8")
+        (change_dir / "plan.md").write_text("AIP 工程方案需要外部能力研究。\n", encoding="utf-8")
+        (change_dir / "aip.md").write_text("# AIP\n", encoding="utf-8")
+        (change_dir / "external-capability-research.md").write_text(
+            "## External Capability Fact Matrix\n"
+            "| Fact ID | Source ID | Evidence anchor | Source-observed fact |\n"
+            "|---|---|---|---|\n"
+            "| FACT-001 | EXT-SRC-001 | EVID-001 | thin |\n",
+            encoding="utf-8",
+        )
+        workflowctl.write_yaml(
+            change_dir / "workflow-state.yaml",
+            {
+                "schema_version": 2,
+                "workflow": {"skill": "automq-ai-dev-workflow-contextpack", "profile": "full"},
+                "stage_status": {"aip": "in_progress"},
+            },
+        )
+        compatibility_errors = workflowctl.validate_aip_construction_compatibility(change_dir)
+        if not any("External Capability Fact Matrix must include" in error for error in compatibility_errors):
+            errors.append(
+                f"{WORKFLOWCTL}: SC-AIP-GLOBAL-COMPAT-001 did not reject an incompatible external fact matrix: {compatibility_errors}"
+            )
     return errors
 
 
@@ -1753,6 +1789,158 @@ Mode: human-decision-participation.
         if good_artifact_errors:
             errors.append(f"{ARTIFACT_VALIDATOR}: complete human decision record should pass, got {good_artifact_errors}")
 
+        bundle_dir = root / "good-decision-bundle"
+        bundle_dir.mkdir()
+        write_common(bundle_dir)
+        (bundle_dir / "decision-bundles").mkdir()
+        bundle_interaction = """## User Decision Interaction
+
+| Stage | Decision ID | Decision key | Prompt ID | Prompt summary | Recommended option | Alternatives | User response | Final status | Decided at |
+|---|---|---|---|---|---|---|---|---|---|
+| prd | PDEC-001; PDEC-002 | bundled-product-decisions | HDB-001 | Batch prompt lists both decisions and all impacts. | adopt both recommendations | reject or split either decision | 同意以上全部列出的决策 | locked | 2026-07-17T00:00:00Z |
+"""
+        (bundle_dir / "proposal.md").write_text(
+            (bundle_dir / "proposal.md").read_text(encoding="utf-8")
+            + "\nPDEC-002 selects the second product behavior.\n"
+            + bundle_interaction,
+            encoding="utf-8",
+        )
+        (bundle_dir / "decision-reviews" / "prd-decisions.md").write_text(
+            """# PRD Decisions
+
+| ID | Decision key | Final decision | Status |
+|---|---|---|---|
+| PDEC-001 | runtime-owner | user-created | locked |
+| PDEC-002 | lifecycle-owner | controller-created | locked |
+""",
+            encoding="utf-8",
+        )
+        prompt_snapshot = (
+            "HDB-001 asks the user to approve PDEC-001 runtime ownership and PDEC-002 lifecycle ownership. "
+            "It lists the recommended choices, rejected alternatives, product impact, verification impact, and downstream consumers."
+        )
+        bundle_doc = {
+            "schema_version": 1,
+            "bundle_id": "HDB-001",
+            "stage": "prd",
+            "prompt_snapshot": prompt_snapshot,
+            "prompt_hash": hashlib.sha256((prompt_snapshot + "\n").encode("utf-8")).hexdigest(),
+            "response_scope": "all-listed",
+            "user_response": "同意以上全部列出的决策",
+            "status": "locked",
+            "decided_at": "2026-07-17T00:00:00Z",
+            "decisions": [
+                {
+                    "decision_id": "PDEC-001",
+                    "decision_key": "runtime.owner",
+                    "recommendation": "The user owns runtime creation.",
+                    "alternatives": "The controller creates the runtime instead.",
+                    "impact": "Locks ownership, API behavior, verification, and downstream consumers.",
+                    "batch_eligible": True,
+                },
+                {
+                    "decision_id": "PDEC-002",
+                    "decision_key": "lifecycle.owner",
+                    "recommendation": "The controller owns lifecycle reconciliation.",
+                    "alternatives": "The user performs lifecycle reconciliation manually.",
+                    "impact": "Locks lifecycle states, failure behavior, verification, and consumers.",
+                    "batch_eligible": True,
+                },
+            ],
+        }
+        bundle_doc["receipt_hash"] = workflowctl.canonical_receipt_hash(bundle_doc)
+        workflowctl.write_yaml(bundle_dir / "decision-bundles" / "HDB-001.yaml", bundle_doc)
+        prd_hashes_before_downstream_bundle = workflowctl.artifact_digest_map(bundle_dir, "prd")
+        artifact_prd_hashes_before_downstream_bundle = artifact_validator.artifact_digest_map(bundle_dir, "prd")
+        downstream_bundle = copy.deepcopy(bundle_doc)
+        downstream_bundle["bundle_id"] = "HDB-002"
+        downstream_bundle["stage"] = "aip"
+        downstream_bundle["decisions"][0]["decision_id"] = "ADEC-001"
+        downstream_bundle["decisions"][1]["decision_id"] = "ADEC-002"
+        downstream_bundle["receipt_hash"] = workflowctl.canonical_receipt_hash(downstream_bundle)
+        workflowctl.write_yaml(bundle_dir / "decision-bundles" / "HDB-002.yaml", downstream_bundle)
+        for validator_name, before_hashes, after_hashes in [
+            (
+                str(WORKFLOWCTL),
+                prd_hashes_before_downstream_bundle,
+                workflowctl.artifact_digest_map(bundle_dir, "prd"),
+            ),
+            (
+                str(ARTIFACT_VALIDATOR),
+                artifact_prd_hashes_before_downstream_bundle,
+                artifact_validator.artifact_digest_map(bundle_dir, "prd"),
+            ),
+        ]:
+            if before_hashes != after_hashes or "decision-bundles/HDB-002.yaml" in after_hashes:
+                errors.append(f"{validator_name}: downstream AIP decision bundle invalidated the PRD receipt")
+        bundled_ids, bundle_errors = workflowctl.human_decision_bundle_records(bundle_dir, "prd")
+        if bundle_errors or bundled_ids != {"PDEC-001", "PDEC-002"}:
+            errors.append(f"{WORKFLOWCTL}: valid decision bundle was rejected: {bundle_errors}, ids={bundled_ids}")
+        artifact_bundled_ids, artifact_bundle_errors = artifact_validator.human_decision_bundle_records(bundle_dir, "prd")
+        if artifact_bundle_errors or artifact_bundled_ids != {"PDEC-001", "PDEC-002"}:
+            errors.append(
+                f"{ARTIFACT_VALIDATOR}: valid decision bundle was rejected: {artifact_bundle_errors}, ids={artifact_bundled_ids}"
+            )
+        bundled_workflow_errors = workflowctl.validate_human_decision_records(
+            workflowctl.WorkflowModel(bundle_dir), "prd"
+        )
+        if bundled_workflow_errors:
+            errors.append(f"{WORKFLOWCTL}: valid bundled human decisions should pass: {bundled_workflow_errors}")
+        bundled_artifact_errors = artifact_validator.validate_human_decision_records(
+            bundle_dir,
+            "prd",
+            "\n".join(
+                (bundle_dir / name).read_text(encoding="utf-8")
+                for name in ["proposal.md", "spec.md", "plan.md", "tasks.md", "source-intake-ledger.md"]
+            ),
+            artifact_validator.read_yaml(bundle_dir / "workflow-state.yaml"),
+        )
+        if bundled_artifact_errors:
+            errors.append(f"{ARTIFACT_VALIDATOR}: valid bundled human decisions should pass: {bundled_artifact_errors}")
+
+        negative_bundle = copy.deepcopy(bundle_doc)
+        negative_bundle["user_response"] = "不同意以上全部列出的决策"
+        negative_bundle["receipt_hash"] = workflowctl.canonical_receipt_hash(negative_bundle)
+        workflowctl.write_yaml(bundle_dir / "decision-bundles" / "HDB-001.yaml", negative_bundle)
+        for validator_name, bundle_result in [
+            (str(WORKFLOWCTL), workflowctl.human_decision_bundle_records(bundle_dir, "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.human_decision_bundle_records(bundle_dir, "prd")),
+        ]:
+            if not any("affirmatively confirm all listed" in error for error in bundle_result[1]):
+                errors.append(f"{validator_name}: negative batch response was accepted")
+
+        invalid_time_bundle = copy.deepcopy(bundle_doc)
+        invalid_time_bundle["decided_at"] = "decided at some later time"
+        invalid_time_bundle["receipt_hash"] = workflowctl.canonical_receipt_hash(invalid_time_bundle)
+        workflowctl.write_yaml(bundle_dir / "decision-bundles" / "HDB-001.yaml", invalid_time_bundle)
+        for validator_name, bundle_result in [
+            (str(WORKFLOWCTL), workflowctl.human_decision_bundle_records(bundle_dir, "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.human_decision_bundle_records(bundle_dir, "prd")),
+        ]:
+            if not any("ISO-8601" in error for error in bundle_result[1]):
+                errors.append(f"{validator_name}: non-timestamp decided_at was accepted")
+
+        wrong_stage_bundle = copy.deepcopy(bundle_doc)
+        wrong_stage_bundle["decisions"][1]["decision_id"] = "ADEC-002"
+        wrong_stage_bundle["receipt_hash"] = workflowctl.canonical_receipt_hash(wrong_stage_bundle)
+        workflowctl.write_yaml(bundle_dir / "decision-bundles" / "HDB-001.yaml", wrong_stage_bundle)
+        for validator_name, bundle_result in [
+            (str(WORKFLOWCTL), workflowctl.human_decision_bundle_records(bundle_dir, "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.human_decision_bundle_records(bundle_dir, "prd")),
+        ]:
+            if not any("must belong to stage prd" in error for error in bundle_result[1]):
+                errors.append(f"{validator_name}: cross-stage decision bundle was accepted")
+
+        malformed_bundle_path = bundle_dir / "decision-bundles" / "HDB-003.yaml"
+        malformed_bundle_path.write_text("schema_version: [unterminated\n", encoding="utf-8")
+        for validator_name, bundle_result in [
+            (str(WORKFLOWCTL), workflowctl.human_decision_bundle_records(bundle_dir, "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.human_decision_bundle_records(bundle_dir, "prd")),
+        ]:
+            if not bundle_result[1]:
+                errors.append(f"{validator_name}: malformed decision bundle did not produce a repairable validation error")
+        malformed_bundle_path.unlink()
+
         def write_ai_authority_common(change_dir: Path, authority_section: str) -> None:
             (change_dir / "decision-reviews").mkdir(parents=True, exist_ok=True)
             (change_dir / "workflow-state.yaml").write_text(
@@ -1904,6 +2092,36 @@ gate_result:
         mpr_artifact_errors = artifact_validator.validate_multi_perspective_review(bad_mpr, "prd")
         if not any("main-local fallback is not allowed" in error or "invalid reviewer_type" in error for error in mpr_artifact_errors):
             errors.append(f"{ARTIFACT_VALIDATOR}: main-local-fallback reviewer was not rejected")
+
+        repair_review = artifact_validator.read_yaml(bad_mpr / "multi-perspective-reviews" / "prd.yaml")
+        repair_review["review_scope"]["review_kind"] = "semantic-repair"
+        repair_review["review_scope"]["required_reviewer_count"] = 1
+        repair_review["reviewers"] = repair_review["reviewers"][:1]
+        workflowctl.write_yaml(bad_mpr / "multi-perspective-reviews" / "prd.yaml", repair_review)
+        for validator_name, review_errors in [
+            (str(WORKFLOWCTL), workflowctl.validate_multi_perspective_review(workflowctl.WorkflowModel(bad_mpr), "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.validate_multi_perspective_review(bad_mpr, "prd")),
+        ]:
+            if not any("repair_context.previous_review_ref" in error for error in review_errors):
+                errors.append(f"{validator_name}: repair review bypassed initial-review evidence")
+        repair_review["repair_context"] = {
+            "previous_review_ref": "multi-perspective-reviews/archive/prd-initial.yaml",
+            "triggering_findings": ["MPR-001"],
+            "changed_artifacts": ["proposal.md"],
+            "narrowed_review_reason": "Only the accepted product-semantics finding changed in this repair.",
+        }
+        workflowctl.write_yaml(bad_mpr / "multi-perspective-reviews" / "prd.yaml", repair_review)
+        for validator_name, review_errors in [
+            (str(WORKFLOWCTL), workflowctl.validate_multi_perspective_review(workflowctl.WorkflowModel(bad_mpr), "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.validate_multi_perspective_review(bad_mpr, "prd")),
+        ]:
+            if any("requires at least" in error for error in review_errors):
+                errors.append(f"{validator_name}: one-reviewer semantic repair was rejected by review policy")
+
+        if "source-intake" in workflowctl.MULTI_PERSPECTIVE_REVIEW_STAGES:
+            errors.append(f"{WORKFLOWCTL}: source-intake must not require a multi-perspective review")
+        if "source-intake" in artifact_validator.MULTI_PERSPECTIVE_REVIEW_STAGES:
+            errors.append(f"{ARTIFACT_VALIDATOR}: source-intake must not require a multi-perspective review")
 
         if "acceptance" in workflowctl.MULTI_PERSPECTIVE_REVIEW_STAGES:
             errors.append(f"{WORKFLOWCTL}: generic acceptance must not be a standalone multi-perspective review stage")
@@ -2302,7 +2520,115 @@ def validate_stage_construction_protocol() -> list[str]:
         errors.append("workflowctl.py and validate_artifacts.py loaded different receipt artifact maps")
     if workflowctl.PLAN_SNAPSHOT_STAGES != artifact_validator.PLAN_SNAPSHOT_STAGES:
         errors.append("workflowctl.py and validate_artifacts.py loaded different plan snapshot stages")
+    if workflowctl.REVIEW_POLICY != artifact_validator.REVIEW_POLICY:
+        errors.append("workflowctl.py and validate_artifacts.py loaded different review policies")
+
+    markdown_table_fixture = """| Name | Value |
+|---|---|
+| ordinary-row | surface contract words are data, not a header |
+| escaped-pipe | left \\| right |
+| inline-code-pipe | `left | right` |
+"""
+    for validator_name, tables, dicts in [
+        (
+            str(WORKFLOWCTL),
+            workflowctl.markdown_tables(markdown_table_fixture),
+            workflowctl.markdown_table_dicts(markdown_table_fixture),
+        ),
+        (
+            str(ARTIFACT_VALIDATOR),
+            artifact_validator.markdown_tables(markdown_table_fixture),
+            artifact_validator.table_dicts(markdown_table_fixture),
+        ),
+    ]:
+        if len(tables) != 1 or tables[0][0] != ["Name", "Value"]:
+            errors.append(f"{validator_name}: Markdown table header detection regressed: {tables}")
+        if len(dicts) != 3 or any(set(row) != {"Name", "Value"} for row in dicts):
+            errors.append(f"{validator_name}: data containing surface/contract was reinterpreted as a header: {dicts}")
+        if dicts and dicts[1].get("Value") != r"left \| right":
+            errors.append(f"{validator_name}: escaped pipe changed Markdown table cell boundaries: {dicts}")
+        if dicts and dicts[2].get("Value") != "left | right":
+            errors.append(f"{validator_name}: inline-code pipe changed Markdown table cell boundaries: {dicts}")
+
+    with tempfile.TemporaryDirectory(prefix="automq-reference-digest-") as digest_tmp:
+        digest_path = Path(digest_tmp) / "semantic.md"
+        digest_path.write_text(
+            """# Semantic Objects
+
+## Product Decisions
+
+| ID | Decision |
+|---|---|
+| PDEC-001 | keep the selected owner behavior |
+| PDEC-002 | keep the independent lifecycle behavior |
+
+## Unrelated Notes
+
+initial note
+""",
+            encoding="utf-8",
+        )
+        section_digest, _ = workflowctl.artifact_reference_digest(
+            digest_path, "semantic.md#Product Decisions"
+        )
+        object_digest, _ = workflowctl.artifact_reference_digest(
+            digest_path, "semantic.md#Product Decisions", "PDEC-001"
+        )
+        digest_path.write_text(
+            digest_path.read_text(encoding="utf-8").replace("initial note", "changed unrelated note"),
+            encoding="utf-8",
+        )
+        if workflowctl.artifact_reference_digest(digest_path, "semantic.md#Product Decisions")[0] != section_digest:
+            errors.append(f"{WORKFLOWCTL}: unrelated section edit invalidated a section-scoped obligation receipt")
+        digest_path.write_text(
+            digest_path.read_text(encoding="utf-8").replace(
+                "keep the independent lifecycle behavior", "change only the independent lifecycle behavior"
+            ),
+            encoding="utf-8",
+        )
+        if workflowctl.artifact_reference_digest(
+            digest_path, "semantic.md#Product Decisions", "PDEC-001"
+        )[0] != object_digest:
+            errors.append(f"{WORKFLOWCTL}: another object row invalidated an object-scoped obligation receipt")
+        digest_path.write_text(
+            digest_path.read_text(encoding="utf-8").replace(
+                "keep the selected owner behavior", "change the selected owner behavior"
+            ),
+            encoding="utf-8",
+        )
+        if workflowctl.artifact_reference_digest(
+            digest_path, "semantic.md#Product Decisions", "PDEC-001"
+        )[0] == object_digest:
+            errors.append(f"{WORKFLOWCTL}: selected object edit did not invalidate its obligation receipt")
+        try:
+            workflowctl.artifact_reference_digest(digest_path, "semantic.md#Missing Section")
+        except ValueError:
+            pass
+        else:
+            errors.append(f"{WORKFLOWCTL}: missing Markdown section silently fell back to whole-file hashing")
     state_machine = workflowctl.WORKFLOW_STATE_MACHINE
+    expected_review_stages = {
+        "source-intake", "prd", "aip", "readiness", "design", "archaeology", "migration",
+        "frontend-contract", "contract", "verification", "task-planning", "pre-execution",
+        "mock-acceptance", "product-acceptance",
+    }
+    if set(workflowctl.REVIEW_POLICY) != expected_review_stages:
+        errors.append(
+            f"workflow state machine: review_policy stage coverage drifted: {sorted(workflowctl.REVIEW_POLICY)}"
+        )
+    for review_stage, policy in workflowctl.REVIEW_POLICY.items():
+        required = policy.get("required")
+        values = [policy.get("initial_min"), policy.get("repair_min"), policy.get("max")]
+        if not isinstance(required, bool) or any(not isinstance(value, int) for value in values):
+            errors.append(f"workflow state machine: {review_stage} review policy has invalid field types")
+            continue
+        initial_min, repair_min, maximum = values
+        if not (0 <= repair_min <= initial_min <= maximum):
+            errors.append(f"workflow state machine: {review_stage} review policy bounds are inconsistent")
+        if required is False and any(values):
+            errors.append(f"workflow state machine: optional review stage {review_stage} must have zero reviewer bounds")
+        if required is True and repair_min < 1:
+            errors.append(f"workflow state machine: required review stage {review_stage} must allow at least one repair reviewer")
     stage_order = [str(item) for item in workflowctl.as_list(state_machine.get("stage_order"))]
     construction_stages = {
         str(item) for item in workflowctl.as_list(state_machine.get("construction_stages"))
@@ -2419,7 +2745,13 @@ def validate_stage_construction_protocol() -> list[str]:
 | Change dir absolute path | {change_dir} |
 | Change id | stage-construction-smoke |
 | Branch name | {branch} |
+| Base branch | {branch} |
 | Base commit | {head} |
+| Base source mode | pinned-commit |
+| Remote ref | none |
+| Remote OID | none |
+| Remote fetched at | none |
+| Fetch command evidence | pinned local test commit |
 | Git top level | {repo} |
 
 ## Resume Verification
@@ -2429,6 +2761,11 @@ def validate_stage_construction_protocol() -> list[str]:
 | Initial | matched |
 """
         (change_dir / "workflow-workdir.md").write_text(workdir_body, encoding="utf-8")
+        (change_dir / "external-capability-research.md").write_text(
+            "# AIP-owned external research\n", encoding="utf-8"
+        )
+        if "external-capability-research.md" in workflowctl.artifact_digest_map(change_dir, "source-intake"):
+            errors.append(f"{WORKFLOWCTL}: source-intake receipt still seals AIP-owned external research")
         workflowctl.write_yaml(
             change_dir / "workflow-state.yaml",
             {
@@ -2613,6 +2950,33 @@ def validate_stage_construction_protocol() -> list[str]:
                 errors.append(
                     f"{WORKFLOWCTL}: update existing deployment signal did not produce SC-OPERATION-MUTABILITY-001"
                 )
+            if "SC-PRD-GLOBAL-COMPAT-001" not in prd_rule_ids:
+                errors.append(
+                    f"{WORKFLOWCTL}: PRD construction omitted SC-PRD-GLOBAL-COMPAT-001"
+                )
+            if "SC-VERSION-BRANCH-ALIGNMENT-001" not in prd_rule_ids:
+                errors.append(
+                    f"{WORKFLOWCTL}: PRD construction omitted SC-VERSION-BRANCH-ALIGNMENT-001"
+                )
+            missing_alignment_errors = artifact_validator.validate_version_alignment(
+                change_dir,
+                "control-plane branch/version signal without its alignment artifact",
+                "",
+            )
+            if not any("missing Version Branch Alignment Matrix" in error for error in missing_alignment_errors):
+                errors.append(
+                    f"{ARTIFACT_VALIDATOR}: SC-VERSION-BRANCH-ALIGNMENT-001 regression did not reject a missing matrix: "
+                    f"{missing_alignment_errors}"
+                )
+            prd_compat_errors = workflowctl.validate_prd_construction_compatibility(change_dir)
+            if not any(
+                "PRD missing Current Product/Code Understanding" in error
+                or "missing Artifact Rubric Scorecard" in error
+                for error in prd_compat_errors
+            ):
+                errors.append(
+                    f"{WORKFLOWCTL}: SC-PRD-GLOBAL-COMPAT-001 did not reject incomplete PRD artifacts: {prd_compat_errors}"
+                )
             for row in workflowctl.as_list(prd_ledger.get("obligations")):
                 item = workflowctl.as_dict(row)
                 if item.get("rule_id") in {"SC-PRD-SEMANTICS-001", "SC-OPERATION-MUTABILITY-001"}:
@@ -2671,7 +3035,7 @@ def validate_stage_construction_protocol() -> list[str]:
             if path.read_bytes() != before:
                 errors.append(f"{WORKFLOWCTL}: rejected stale passed-stage prepare modified {path.name}")
         (change_dir / "backflow.yaml").write_text(
-            "schema_version: 1\ntriggers:\n  BF-REOPEN-001:\n    status: open\n    invalidates:\n      artifacts:\n        - source-intake-ledger.md\n",
+            "schema_version: 1\ntriggers:\n  BF-REOPEN-001:\n    status: open\n    resolution_stage: source-intake\n    invalidates:\n      artifacts:\n        - source-intake-ledger.md\n",
             encoding="utf-8",
         )
         reopen_state = workflowctl.as_dict(workflowctl.load_yaml(change_dir / "workflow-state.yaml"))
@@ -3081,7 +3445,7 @@ def validate_stage_construction_protocol() -> list[str]:
             },
         )
         (acceptance_reopen_dir / "backflow.yaml").write_text(
-            "schema_version: 1\ntriggers:\n  BF-ACCEPT-001:\n    status: open\n    invalidates:\n      artifacts:\n        - mock-acceptance.md\n",
+            "schema_version: 1\ntriggers:\n  BF-ACCEPT-001:\n    status: open\n    resolution_stage: mock-acceptance\n    invalidates:\n      artifacts:\n        - mock-acceptance.md\n",
             encoding="utf-8",
         )
         if workflowctl.reopen_stage(
@@ -3431,6 +3795,61 @@ none
             )
             if not workflowctl.validate_workflow_defects(defect_dir):
                 errors.append(f"{WORKFLOWCTL}: open late defect did not block workflow validation")
+            repaired_artifact = defect_dir / "spec.md"
+            repaired_artifact.write_text(
+                "# Product requirement\n\nThe managed resource owner is now explicit and verifiable.\n",
+                encoding="utf-8",
+            )
+            (defect_dir / "unrelated.md").write_text("unrelated evidence\n", encoding="utf-8")
+            if quiet_call(
+                workflowctl.repair_late_defect,
+                defect_dir,
+                "LD-001",
+                "prd",
+                ["unrelated.md"],
+                ["python3 -c 'print(\"unrelated validator\")'"],
+            ) == 0:
+                errors.append(f"{WORKFLOWCTL}: unrelated artifact falsely repaired a late defect")
+            if quiet_call(
+                workflowctl.repair_late_defect,
+                defect_dir,
+                "LD-001",
+                "prd",
+                ["spec.md"],
+                ["python3 -c 'raise SystemExit(3)'"],
+            ) == 0:
+                errors.append(f"{WORKFLOWCTL}: failing validator command falsely repaired a late defect")
+            if workflowctl.repair_late_defect(
+                defect_dir,
+                "LD-001",
+                "prd",
+                ["spec.md"],
+                ["python3 -c 'print(\"local repair validator passed\")'"],
+            ) != 0:
+                errors.append(f"{WORKFLOWCTL}: local late-defect repair was rejected")
+            else:
+                locally_repaired_doc = workflowctl.as_dict(
+                    workflowctl.load_yaml(defect_dir / "workflow-defects.yaml")
+                )
+                locally_repaired = workflowctl.as_dict(
+                    workflowctl.as_dict(locally_repaired_doc.get("defects")).get("LD-001")
+                )
+                isolated_doc = {
+                    "schema_version": 1,
+                    "defects": {"LD-001": copy.deepcopy(locally_repaired)},
+                }
+                if workflowctl.validate_workflow_defects_doc(
+                    defect_dir / "workflow-defects.yaml", isolated_doc, True
+                ):
+                    errors.append(f"{WORKFLOWCTL}: intact locally repaired defect still blocked product workflow")
+                repaired_body = repaired_artifact.read_text(encoding="utf-8")
+                repaired_artifact.write_text(repaired_body + "changed after repair\n", encoding="utf-8")
+                stale_local_errors = workflowctl.validate_workflow_defects_doc(
+                    defect_dir / "workflow-defects.yaml", isolated_doc, True
+                )
+                if not any("local repair evidence is stale" in error for error in stale_local_errors):
+                    errors.append(f"{WORKFLOWCTL}: stale local repair artifact hash was accepted")
+                repaired_artifact.write_text(repaired_body, encoding="utf-8")
             if "workflow-defects.yaml" not in workflowctl.stage_required_artifact_rels(defect_dir, "prd"):
                 errors.append(f"{WORKFLOWCTL}: defect ledger is not sealed into stage receipts")
             if "workflow-defects.yaml" in workflowctl.stage_required_artifact_rels(defect_dir, "source-intake"):
@@ -3540,6 +3959,7 @@ none
                     or recurrence_row.get("runtime_version_introduced") != runtime_manifest.get("runtime_version")
                     or recurrence_row.get("promotion_evidence")
                     or recurrence_row.get("promotion_receipt_hash")
+                    or recurrence_row.get("local_repair_evidence")
                 ):
                     errors.append(f"{WORKFLOWCTL}: recurring promoted defect retained stale promotion/runtime evidence")
             promoted_doc = workflowctl.as_dict(workflowctl.load_yaml(defect_dir / "workflow-defects.yaml"))
@@ -3573,6 +3993,74 @@ none
         validate_body = inspect.getsource(workflowctl.validate)
         if "validate_workflow_events" in validate_body:
             errors.append(f"{WORKFLOWCTL}: advisory workflow telemetry must not deadlock canonical stage validation")
+
+        backflow_resolution_dir = repo / "specs" / "changes" / "backflow-resolution-smoke"
+        backflow_resolution_dir.mkdir(parents=True)
+        workflowctl.write_yaml(
+            backflow_resolution_dir / "workflow-state.yaml",
+            {
+                "stage_status": {"prd": "passed"},
+                "stage_receipts": {
+                    "prd": {
+                        "stage": "prd",
+                        "status": "passed",
+                        "issued_at": "2026-07-17T00:00:00+00:00",
+                        "receipt_hash": "fresh-prd-receipt",
+                    }
+                },
+                "stage_reopens": [
+                    {
+                        "stage": "prd",
+                        "backflow_id": "BF-AUTO-001",
+                        "reopened_at": "2026-07-17T00:00:00+00:00",
+                    }
+                ],
+            },
+        )
+        workflowctl.write_yaml(
+            backflow_resolution_dir / "backflow.yaml",
+            {
+                "schema_version": 1,
+                "triggers": {
+                    "BF-AUTO-001": {
+                        "status": "open",
+                        "resolution_stage": "prd",
+                        "invalidates": {
+                            "artifacts": ["proposal.md"],
+                            "decisions": [],
+                            "contracts": [],
+                            "verifications": [],
+                            "tasks": [],
+                        },
+                    }
+                },
+            },
+        )
+        missing_reopen_state = workflowctl.as_dict(
+            workflowctl.load_yaml(backflow_resolution_dir / "workflow-state.yaml")
+        )
+        saved_reopens = missing_reopen_state.pop("stage_reopens")
+        workflowctl.write_yaml(backflow_resolution_dir / "workflow-state.yaml", missing_reopen_state)
+        if not any(
+            "no matching reopen audit" in error
+            for error in workflowctl.validate_backflow(workflowctl.WorkflowModel(backflow_resolution_dir))
+        ):
+            errors.append(f"{WORKFLOWCTL}: open backflow without reopen audit did not block revalidation")
+        missing_reopen_state["stage_reopens"] = saved_reopens
+        workflowctl.write_yaml(backflow_resolution_dir / "workflow-state.yaml", missing_reopen_state)
+        workflowctl.auto_resolve_backflows(backflow_resolution_dir, "prd")
+        resolved_trigger = workflowctl.as_dict(
+            workflowctl.as_dict(
+                workflowctl.load_yaml(backflow_resolution_dir / "backflow.yaml").get("triggers")
+            ).get("BF-AUTO-001")
+        )
+        if (
+            resolved_trigger.get("status") != "resolved"
+            or resolved_trigger.get("resolution_receipt_hash") != "fresh-prd-receipt"
+        ):
+            errors.append(f"{WORKFLOWCTL}: fresh resolution-stage receipt did not auto-resolve backflow")
+        if workflowctl.validate_backflow(workflowctl.WorkflowModel(backflow_resolution_dir)):
+            errors.append(f"{WORKFLOWCTL}: auto-resolved backflow failed canonical validation")
 
         identity_path = event_dir / "workflow-workdir.md"
         identity_path.write_text("# Workflow Workdir Identity\n\n| Item | Value |\n|---|---|\n| Change id | x |\n\n## Resume Verification\n\ninitial\n", encoding="utf-8")
@@ -3609,6 +4097,11 @@ none
 | Branch name | {ancestry_branch} |
 | Base branch | {ancestry_branch} |
 | Base commit | {ancestry_head} |
+| Base source mode | pinned-commit |
+| Remote ref | none |
+| Remote OID | none |
+| Remote fetched at | none |
+| Fetch command evidence | pinned local test commit |
 | Git top level | {repo.as_posix()} |
 
 ## Resume Verification
@@ -3628,6 +4121,64 @@ none
             )
             if workflowctl.validate_workdir_identity(workflowctl.WorkflowModel(ancestry_dir)):
                 errors.append(f"{WORKFLOWCTL}: valid base-commit ancestry was rejected")
+            identity_before_resume = (ancestry_dir / "workflow-workdir.md").read_bytes()
+            if workflowctl.verify_resume(ancestry_dir) != 0:
+                errors.append(f"{WORKFLOWCTL}: verify-resume rejected a matching identity")
+            if (ancestry_dir / "workflow-workdir.md").read_bytes() != identity_before_resume:
+                errors.append(f"{WORKFLOWCTL}: verify-resume modified the receipt-bearing workflow identity")
+            resume_events = workflowctl.as_list(
+                workflowctl.as_dict(workflowctl.load_yaml(ancestry_dir / "workflow-events.yaml")).get("events")
+            )
+            if not any(workflowctl.text(workflowctl.as_dict(item).get("event_type")) == "resume_verified" for item in resume_events):
+                errors.append(f"{WORKFLOWCTL}: verify-resume did not append a hash-chained resume event")
+
+            stale_remote_identity = ancestry_identity.replace(
+                f"| Base branch | {ancestry_branch} |", "| Base branch | origin/main |"
+            )
+            (ancestry_dir / "workflow-workdir.md").write_text(stale_remote_identity, encoding="utf-8")
+            for validator_name, identity_errors in [
+                (
+                    str(WORKFLOWCTL),
+                    workflowctl.validate_workdir_identity(workflowctl.WorkflowModel(ancestry_dir)),
+                ),
+                (
+                    str(ARTIFACT_VALIDATOR),
+                    artifact_validator.validate_workdir_identity(
+                        ancestry_dir, artifact_validator.read_yaml(ancestry_dir / "workflow-state.yaml")
+                    ),
+                ),
+            ]:
+                if not any("origin base requires" in error for error in identity_errors):
+                    errors.append(f"{validator_name}: origin base accepted without fetched-remote evidence")
+
+            fresh_remote_identity = (
+                stale_remote_identity
+                .replace("| Base source mode | pinned-commit |", "| Base source mode | fetched-remote |")
+                .replace("| Remote ref | none |", "| Remote ref | origin/main |")
+                .replace("| Remote OID | none |", f"| Remote OID | {ancestry_head} |")
+                .replace("| Remote fetched at | none |", "| Remote fetched at | 2026-07-17T00:00:00Z |")
+                .replace(
+                    "| Fetch command evidence | pinned local test commit |",
+                    "| Fetch command evidence | git fetch origin main completed |",
+                )
+            )
+            (ancestry_dir / "workflow-workdir.md").write_text(fresh_remote_identity, encoding="utf-8")
+            for validator_name, identity_errors in [
+                (
+                    str(WORKFLOWCTL),
+                    workflowctl.validate_workdir_identity(workflowctl.WorkflowModel(ancestry_dir)),
+                ),
+                (
+                    str(ARTIFACT_VALIDATOR),
+                    artifact_validator.validate_workdir_identity(
+                        ancestry_dir, artifact_validator.read_yaml(ancestry_dir / "workflow-state.yaml")
+                    ),
+                ),
+            ]:
+                if identity_errors:
+                    errors.append(f"{validator_name}: fresh remote base identity was rejected: {identity_errors}")
+
+            (ancestry_dir / "workflow-workdir.md").write_text(ancestry_identity, encoding="utf-8")
             invalid_base = "0" * 40
             (ancestry_dir / "workflow-workdir.md").write_text(
                 ancestry_identity.replace(ancestry_head, invalid_base), encoding="utf-8"
