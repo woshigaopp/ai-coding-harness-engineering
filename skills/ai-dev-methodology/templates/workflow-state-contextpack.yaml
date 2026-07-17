@@ -5,7 +5,7 @@ workflow:
   stage_construction_protocol: stage-construction-v1
   runtime:
     version: contextpack-runtime-2026.07.17.3
-    manifest_sha256: 25127bc7992f48a759c3fd0f1b33daaea730631264729c249bfe01aea5537c14
+    manifest_sha256: 1d541275229eadf6284eadf1a967e378312f8bbe9c50973af7f2e30b10e51d31
     component_hashes:
       product_requirement_design_skill: 7925236001a0fb15a66769753f7e6fdf32ab9d36aa8edf842432204f8589f6a8
       aip_template_skill: cc32fc7a8d0339e50a4fbce00b38543e16c8f3d82a899b5fbb0d0733ce3dcbeb
@@ -27,10 +27,10 @@ workflow:
       methodology_skill: 132be8c3753cd73843829efaf4420104a9b705414a1e85552b53f4231453b992
       stage_construction_contract: bf6d41e4f2b4f1bd408511f62f455861cef58c708af6ff1b66f9fcd45ed469f8
       workflow_state_machine: 1dff577a70cea69387d5955354601aa5d0a5d8d852b67023ff1566eb58a90f79
-      workflowctl: 722a075364dfee5759da18d258ab5c2e2e65b395f8e221ff2cf462d3430d4900
-      validate_artifacts: dfad38e1834c7ffdb48e1c035886f0f61516bfb3fc1db2303342fa00fb8ebab2
+      workflowctl: cacf58cc922b4e6f6c30c2f0adceaee170fd12786cdf473206225fc58af39b04
+      validate_artifacts: 288c218d853d48b090082fa23005ab86b551ec3b21d26f92d49b8ea48e2723bb
       atomic_issue_compile: 15cdaa878ffa4ce44cbd28c9359094cd8d439ef0b3aea87e3febc34d9a8fc4ec
-      validate_skill_suite: fb1ea074dd36f187fce9e0963ee61c286ffbee50232ee05fd2634f02ed7ea2ff
+      validate_skill_suite: 3a6edc7d8c8025015de212c31e5bd4d6e6bb00fd01298ce57f7e717083ab35ad
       atomic_issue_quality_review_template: 5dd708514d1dc250b62121af5c76adf9fc51e4aec18b8e40d23741917e402a6b
       task_semantic_review_template: 3472aedc84864c2e7e621a2fd4b5f8026ece6d830f0404641ecec8b4f6de6eb1
       multi_perspective_review_template: d56b5073ad4f9c20f1ffca8570a52c33f532f7df1c399637bd066d0206552a88
@@ -38,7 +38,7 @@ workflow:
       atomic_issue_packet_schema: 79fc56a90fb845af8fd5d478861f3b5340ac0f7456d8d0300037cb8d8c073f31
       atomic_issue_template: 1d1f0c9b1da99e38f9b36b881c61c2bac9e60ae240331d4de5ccedd9e76f1973
       stage_construction_protocol: 6fa4ae006e607946831641f4ef023c52a3244b48f39a9360351dac257d1aea9c
-      artifact_completeness_spec: 89bfae20ecea467e7aefc1a8ccdef215d4cd1c79ce48338965cce7754baf830c
+      artifact_completeness_spec: 5609defb87573f7870312f66ee9cb1c093ebc998465b7c4ac7c01e140877131e
       runtime_resource_routing: c4575a264fe8d620366d9efa53bafc59a485477e340f4bf4dcb7ef0fdbc412ca
       runtime_resource_bundle: a82695212677f4a1676385bd7b279f968643c07701a07d7dc6257c1aecfd62eb
       contextpack_skill: d8dfd501509bafbfafdf0ba321895cc885a4b8c884662edc095fd184b8b74f33

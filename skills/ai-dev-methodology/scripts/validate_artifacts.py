@@ -1617,8 +1617,21 @@ def aip_sections_for_reference(markdown: str, section_ref: str) -> str:
 
 def current_architecture_evidence_values(markdown: str) -> list[str]:
     evidence: list[str] = []
+    required_headers = {
+        re.sub(r"[^a-z0-9]+", "", column.lower())
+        for column in (
+            "Area",
+            "Current architecture / behavior",
+            "Evidence path / command",
+            "Engineering implication",
+            "Gap / DEC",
+        )
+    }
     for row in table_dicts(markdown):
-        raw = table_get(row, "Evidence path / command", "Evidence", "Evidence path", "command")
+        normalized_headers = {re.sub(r"[^a-z0-9]+", "", key.lower()) for key in row}
+        if not required_headers <= normalized_headers:
+            continue
+        raw = table_get(row, "Evidence path / command")
         if not raw:
             continue
         if not re.search(r"(?:/|\\|\.java|\.ts|\.tsx|\.go|\.py|\.yaml|\.yml|\.tf|rg |grep |mvn |pnpm |npm |curl )", raw):
