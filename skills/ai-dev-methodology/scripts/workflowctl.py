@@ -1429,7 +1429,9 @@ def plan_append_only_errors(change_dir: Path, workflow_doc: dict[str, Any], stag
     if accepted_plan and not current_plan.startswith(accepted_plan):
         return [
             f"{stage}: plan.md rewrites accepted {upstream_stage} semantics; "
-            f"restore stage-snapshots/{upstream_stage}-plan.md as the prefix or backflow/reopen {upstream_stage}"
+            f"restore the accepted plan body after the generated `---` wrapper in "
+            f"stage-snapshots/{upstream_stage}-plan.md as the exact prefix (do not copy the snapshot header), "
+            f"or backflow/reopen {upstream_stage}"
         ]
     return []
 

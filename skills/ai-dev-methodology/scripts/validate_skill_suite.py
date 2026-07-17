@@ -4455,8 +4455,11 @@ none
         if workflowctl.plan_append_only_errors(event_dir, append_only_state, "readiness"):
             errors.append(f"{WORKFLOWCTL}: append-only downstream plan extension was rejected")
         (event_dir / "plan.md").write_text("# Plan\n\n## AIP\nrewritten design\n", encoding="utf-8")
-        if not workflowctl.plan_append_only_errors(event_dir, append_only_state, "readiness"):
+        snapshot_rewrite_errors = workflowctl.plan_append_only_errors(event_dir, append_only_state, "readiness")
+        if not snapshot_rewrite_errors:
             errors.append(f"{WORKFLOWCTL}: downstream plan rewrite of accepted snapshot was allowed")
+        elif not any("after the generated `---` wrapper" in error and "do not copy the snapshot header" in error for error in snapshot_rewrite_errors):
+            errors.append(f"{WORKFLOWCTL}: snapshot rewrite diagnostic does not explain the accepted plan body boundary")
         workflowctl.write_yaml(event_dir / "workflow-state.yaml", append_only_state)
         preflight_output = io.StringIO()
         with contextlib.redirect_stdout(preflight_output), contextlib.redirect_stderr(preflight_output):
