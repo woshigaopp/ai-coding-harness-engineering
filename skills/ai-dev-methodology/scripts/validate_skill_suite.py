@@ -755,7 +755,11 @@ def validate_aip_design_closure_reference() -> list[str]:
 
     for path in [WORKFLOWCTL, ARTIFACT_VALIDATOR]:
         body = read(path)
-        for helper in ["validate_mechanism_design_closure", "validate_aip_narrative_materialization"]:
+        for helper in [
+            "validate_mechanism_design_closure",
+            "validate_aip_narrative_materialization",
+            "validate_mechanism_model_row_identity",
+        ]:
             if f"def {helper}" not in body:
                 errors.append(f"{path}: missing AIP design closure validator helper {helper}")
     # SC-AIP-GLOBAL-COMPAT-001 regression: AIP construction must invoke the
@@ -851,6 +855,76 @@ x
     artifact_mech_errors = artifact_validator.validate_mechanism_design_closure(Path("/tmp/aip-smoke"), internal_api_aip, "aip.md")
     if any("external mechanism row must reference" in error for error in artifact_mech_errors):
         errors.append(f"{ARTIFACT_VALIDATOR}: internal API locked N/A smoke incorrectly required external MECH/FACT/CONSTRAINT")
+
+    duplicate_model_rows = """## External API Parameter Map
+| Parameter row | External system/API/resource | Parameter / option |
+|---|---|---|
+| EXTAPI-011 | Kubernetes VersionApi | GET /version/ reachability |
+| EXTAPI-011 | RPC core | error envelope category/code |
+"""
+    unique_model_rows = duplicate_model_rows.replace(
+        "| EXTAPI-011 | RPC core |",
+        "| EXTAPI-012 | RPC core |",
+    )
+    audit_reference_rows = """## Mechanism Row Inventory
+| Mechanism row | Selected production mechanism | Canonical owner |
+|---|---|---|
+| MECH-001 | route through the canonical provider | rpc-core |
+
+## Mechanism Design Local Audit
+| Mechanism row | Auditor finding | Required backflow |
+|---|---|---|
+| MECH-001 | none | none |
+"""
+    for validator_name, duplicate_errors, unique_errors, audit_errors in [
+        (
+            str(WORKFLOWCTL),
+            workflowctl.validate_mechanism_model_row_identity(duplicate_model_rows, "mechanism-design"),
+            workflowctl.validate_mechanism_model_row_identity(unique_model_rows, "mechanism-design"),
+            workflowctl.validate_mechanism_model_row_identity(audit_reference_rows, "mechanism-design"),
+        ),
+        (
+            str(ARTIFACT_VALIDATOR),
+            artifact_validator.validate_mechanism_model_row_identity(duplicate_model_rows, "mechanism-design-model.md"),
+            artifact_validator.validate_mechanism_model_row_identity(unique_model_rows, "mechanism-design-model.md"),
+            artifact_validator.validate_mechanism_model_row_identity(audit_reference_rows, "mechanism-design-model.md"),
+        ),
+    ]:
+        if not any("duplicate rows: EXTAPI-011" in error for error in duplicate_errors):
+            errors.append(f"{validator_name}: duplicate semantic mechanism row ID was accepted")
+        if unique_errors:
+            errors.append(f"{validator_name}: unique semantic mechanism row IDs were rejected: {unique_errors}")
+        if audit_errors:
+            errors.append(f"{validator_name}: mechanism audit references were misclassified as canonical row definitions: {audit_errors}")
+    canonical_row_smokes = [
+        ("Mechanism row", "MECH-001", "Selected production mechanism", "Canonical owner"),
+        ("Sequence row", "OPSEQ-001", "Ordered production steps", "External calls/resources"),
+        ("Parameter row", "EXTAPI-001", "External system/API/resource", "Parameter / option"),
+        ("Event row", "EVT-001", "Event / step", "State owner"),
+        ("Runtime row", "RMM-001", "Mode / runtime", "New mode materialization design"),
+        ("Resource row", "RLM-001", "Selection/provenance", "Create timing"),
+        ("Failure row", "FCM-001", "Failure point", "Consistency invariant"),
+        ("Interface row", "MIM-001", "Producer module", "Consumer module"),
+    ]
+    for label, row_id, signature_one, signature_two in canonical_row_smokes:
+        duplicate_rows = (
+            f"| {label} | {signature_one} | {signature_two} |\n"
+            "|---|---|---|\n"
+            f"| {row_id} | first definition | owner one |\n"
+            f"| {row_id} | second definition | owner two |\n"
+        )
+        for validator_name, duplicate_errors in [
+            (
+                str(WORKFLOWCTL),
+                workflowctl.validate_mechanism_model_row_identity(duplicate_rows, "mechanism-design"),
+            ),
+            (
+                str(ARTIFACT_VALIDATOR),
+                artifact_validator.validate_mechanism_model_row_identity(duplicate_rows, "mechanism-design-model.md"),
+            ),
+        ]:
+            if not any(f"duplicate rows: {row_id}" in error for error in duplicate_errors):
+                errors.append(f"{validator_name}: duplicate canonical {row_id} identity was accepted")
     with tempfile.TemporaryDirectory() as tmp:
         change_dir = Path(tmp) / "specs" / "changes" / "aip-global-compat-smoke"
         change_dir.mkdir(parents=True)
