@@ -39,9 +39,11 @@ specs/changes/<change-id>/workflow-workdir.md
 恢复 session、上下文压缩后继续、cwd 不确定或用户说“继续”时：
 
 1. 先找并读取 active change 的 `workflow-workdir.md`。
-2. 对比 worktree、change dir、change-id、branch、base commit。
-3. 把结果追加到 `Resume Verification`。
+2. 运行 `workflowctl.py verify-resume specs/changes/<change-id>`，确定性对比 worktree、change dir、change-id、branch 和 base commit。
+3. 命令只追加 hash-chained `resume_verified` workflow event，不修改 receipt-bearing `workflow-workdir.md`。
 4. 不一致时切回登记 worktree 或报告 blocked；不得创建新 change/worktree。
+
+Base branch 为 `origin/*` 时，source-intake 前必须 fetch 并固定 Remote OID、fetch 时间和命令；“最新分支”不能只消费本地缓存 ref。
 
 详细恢复与隔离规则读取 [workflow-rule-reference.md](references/workflow-rule-reference.md) 的 `Workflow Workdir Identity Gate`、`Session Resume Identity Gate` 和 `Repo Isolation Gate`。
 
@@ -58,7 +60,7 @@ workflow:
   profile: full
   stage_construction_protocol: stage-construction-v1
   runtime:
-    version: contextpack-runtime-2026.07.14.4
+    version: <copied from workflow-state-contextpack.yaml>
     manifest_sha256: <copied from workflow-state-contextpack.yaml>
 ```
 
@@ -111,6 +113,8 @@ source/trigger
 python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py validate-obligation <stage> <obligation-id> specs/changes/<change-id>
 ```
 
+canonical artifact 必须引用到最窄稳定 section，例如 `spec.md#用户可见状态`。typed obligation 的 receipt 只固定该 section 中包含自身 `object_id` 的结构化行；禁止用整个 dense Markdown 文件的 hash 让无关 row 一起 stale。
+
 确实不适用且规则允许 N/A 时运行：
 
 ```bash
@@ -149,7 +153,15 @@ python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowct
 
 这类失败必须作为 `late_detection_defect` 运行 `workflowctl.py record-late-defect` 写入 `workflow-defects.yaml`，把稳定 `failure_signature` 前移到 machine contract、preflight 或 incremental validator，并记录 machine-rule/test promotion target。不得只在当前 artifact 中补关键词。
 
-`open` defect 会阻断后续 gate。修复 machine rule 和 regression test并发布新 runtime manifest 后，先迁移 runtime。若发布只改变 `stage-construction-contracts.yaml` 和非行为测试组件，必须从 defect 的 `should_have_caught_stage` 限定失效范围；命令会校验 open defect、旧 runtime 和 changed components，其他 runtime 变化禁止缩窄：
+`open` defect 会阻断后续 gate。产品需求 workflow 先修当前 change 的 artifact 和 validator evidence，再运行：
+
+```bash
+python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py repair-late-defect \
+  specs/changes/<change-id> <LD-ID> --repair-stage <should-have-caught-stage> \
+  --artifact-path <repaired-artifact> --validator-command '<command-to-run-and-receipt>'
+```
+
+命令会实际执行每条 validator command（单条最多 600 秒），并固定 exit code、运行时间和 output digest；任一命令失败/超时或 repaired artifacts 不包含 defect 的 `affected_artifact` 时不解除阻塞。`locally-repaired` 允许当前需求继续，但不代表全局规则已晋升。产品 workflow 禁止直接修改 `${CODEX_HOME}/skills` 或发布 runtime；machine rule、regression test 和新 runtime 必须在独立 methodology maintenance/retrospective 中完成。只有用户明确进入 methodology maintenance 时，才迁移并晋升：
 
 ```bash
 python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py migrate-workflow-runtime specs/changes/<change-id> \
@@ -165,7 +177,7 @@ python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowct
   --test-id <stable-rule-or-test-id>
 ```
 
-晋升只证明缺陷已进入可重复的机器规则/测试，不替代当前 change 的 artifact 修复。完成后从 `should_have_caught_stage` 重新 `prepare-stage`、验证并签收；不得通过删除 defect ledger 解锁。
+晋升只证明缺陷已进入可重复的机器规则/测试，不替代当前 change 的 artifact 修复。完成后从 `should_have_caught_stage` 重新 `prepare-stage`、验证并签收；不得通过删除 defect ledger 解锁。active workflow 不因另一个产品需求发现 defect 而自动迁移。
 
 ## Stage Transition
 
@@ -187,15 +199,15 @@ mock-acceptance
 product-acceptance
 ```
 
-每个阶段统一执行：
+每个阶段统一执行 deterministic construction；只有 machine `review_policy` 标记 `required=true` 的关键 gate 才执行只读 review：
 
 ```text
 rehydrate upstream
 -> prepare-stage
 -> close/validate obligations depth-first
 -> deterministic stage validation
--> freeze review packet
--> readonly multi-perspective review
+-> [review_required] freeze review packet
+-> [review_required] readonly multi-perspective review
 -> main-agent disposition/repair
 -> rerun gates
 -> pass-stage receipt
@@ -239,6 +251,8 @@ rehydrate upstream
 
 Context pack 必须从磁盘 canonical artifacts 重新生成，包含 source ledger、语义摘录、locked decisions、禁止重新解释、boundary-specific facts 和 downstream coverage。聊天记忆不能补 canonical 缺口。
 
+`external-capability-research.md` 是 PRD normalized 之后、AIP/design 之前构造并由 AIP receipt 封存的工程研究归纳，不属于 source-intake receipt。source-intake 只登记它消费的原始 URL、代码、SDK 和用户输入；研究归纳的 schema 或叙述修复不得回退 source-intake。
+
 已 `passed` 的 plan-bearing 上游必须从 `stage-snapshots/<stage>-plan.md` 恢复接受时语义；`plan.md` 只是当前阶段继续扩展的工作副本，不能用它覆盖或重新解释 snapshot。上游 backflow 后由 `pass-stage` 替换 snapshot，再重新生成下游 context pack。
 
 缺失或不完整时先回流上游；不得写下游 candidate artifact。
@@ -252,7 +266,7 @@ Context pack 必须从磁盘 canonical artifacts 重新生成，包含 source le
 - “继续推进”“直到做完”不等于决策授权。
 - 用户声明参与决策后，所有阶段决策都必须逐条询问，直到用户明确退出或放宽。
 
-一次只发一条 Human Decision Prompt。生成前读取 `${CODEX_HOME:-$HOME/.codex}/skills/verbatim-script-style/SKILL.md`。用户回答后先更新阶段 decision document、Decision Registry、Semantic Consumption Matrix 和必要 backflow，再问下一条。
+默认一次只发一条 Human Decision Prompt。用户明确要求集中查看多个决策时，允许用 `decision-bundles/HDB-xxx.yaml` 固定完整 prompt、逐项推荐/备选/影响、batch eligibility、用户对 `all-listed` 的明确响应和 receipt hash；只有合法 bundle 才能一次锁定多项，模糊的“都同意”仍无效。生成交互文本前只在当前 session 首次读取 `${CODEX_HOME:-$HOME/.codex}/skills/verbatim-script-style/SKILL.md`，后续使用 execution pack 中的 prompt schema，不重复装载全文。用户回答后先更新阶段 decision document、Decision Registry、Semantic Consumption Matrix 和必要 backflow。
 
 完整字段和交互状态读取 [workflow-rule-reference.md](references/workflow-rule-reference.md) 的 `Human Decision Participation Gate` 和 `决策文档纪律`。
 

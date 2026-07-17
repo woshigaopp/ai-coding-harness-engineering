@@ -1,6 +1,6 @@
 # User Decision Interaction
 
-> 未授权的 PRD/AIP 决策必须由用户逐条确认。进入 `human-decision-participation` 模式后，所有阶段产生或修改的阶段决策都必须逐条确认。本表记录交互、授权和锁定结果，不能替代 `decision-reviews/<stage>-decisions.md`。
+> 未授权的 PRD/AIP 决策默认由用户逐条确认。用户明确要求集中查看时，可通过 `decision-bundles/HDB-xxx.yaml` 一次确认多项；bundle 必须固定完整 prompt、逐项语义和明确 all-listed 响应。本表记录交互、授权和锁定结果，不能替代 `decision-reviews/<stage>-decisions.md`。
 
 ## Decision Authority
 
@@ -23,4 +23,4 @@ Exit gate:
 - [ ] When `human-decision-participation` is enabled, every stage decision has exactly one ledger row with prompt ID, prompt summary, user response, final status, affected artifacts, verification, and decided-at timestamp.
 - [ ] User responses are written back to the matching decision details in `decision-reviews/<stage>-decisions.md`.
 - [ ] Ambiguous or no-response decisions remain `open` and block PRD completion.
-- [ ] Each Human Decision Prompt asks for one decision only. Do not batch multiple decisions or close several decisions with one "all agreed" response.
+- [ ] Each Human Decision Prompt asks for one decision, unless a valid HDB receipt seals the full multi-decision prompt and explicit all-listed response. Unreceipted "all agreed" responses never close multiple decisions.

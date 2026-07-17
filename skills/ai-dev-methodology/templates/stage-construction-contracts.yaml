@@ -293,6 +293,33 @@ rules:
       - verifications
       - downstream_consumers
 
+  SC-PRD-GLOBAL-COMPAT-001:
+    title: 在冻结评审前通过全局 PRD artifact schema 与 rubric 兼容检查
+    earliest_stage: prd
+    phase: incremental
+    rationale: stage construction 必须前移发现固定 PRD section、current-code table、decision-surface enum/closure 和 rubric scorecard 缺口，不能等 pass-stage 才暴露。
+    repair_stage: prd
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - negative_assertions
+      - downstream_consumers
+
+  SC-VERSION-BRANCH-ALIGNMENT-001:
+    title: 在冻结评审前锁定版本分支模板与跨仓基线对齐
+    earliest_stage: prd
+    phase: incremental
+    rationale: control-plane、data-plane、Terraform、IAC、deployment template、test orchestration 或版本/分支信号必须在 PRD 构造期形成 Version Branch Alignment Matrix；不得等 pass-stage 的全量 artifact gate 才发现缺表。
+    repair_stage: prd
+    allow_not_applicable: true
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - semantic_objects
+      - negative_assertions
+      - downstream_consumers
+
   SC-SURFACE-001:
     title: 发现并投影决策面义务
     earliest_stage: prd
@@ -334,6 +361,19 @@ rules:
       - decisions
       - semantic_objects
       - verifications
+      - downstream_consumers
+
+  SC-AIP-GLOBAL-COMPAT-001:
+    title: 在逐项闭合时验证 AIP 全局 artifact 兼容性
+    earliest_stage: aip
+    phase: incremental
+    rationale: stage construction 必须前移发现外部研究表、机制模型、AIP 正文物化、工程完整度和主叙事语言缺口，不能等 pass-stage 才暴露。
+    repair_stage: aip
+    allow_not_applicable: false
+    required_closure:
+      - canonical_artifacts
+      - evidence
+      - negative_assertions
       - downstream_consumers
 
   SC-EXTERNAL-FACT-001:
@@ -952,11 +992,14 @@ stages:
     always:
       - SC-CURRENT-STATE-001
       - SC-PRD-SEMANTICS-001
+      - SC-PRD-GLOBAL-COMPAT-001
+      - SC-VERSION-BRANCH-ALIGNMENT-001
       - SC-SURFACE-001
       - SC-HUMAN-DECISION-001
   aip:
     always:
       - SC-AIP-MECHANISM-001
+      - SC-AIP-GLOBAL-COMPAT-001
       - SC-EXTERNAL-FACT-001
       - SC-HUMAN-DECISION-001
   readiness:

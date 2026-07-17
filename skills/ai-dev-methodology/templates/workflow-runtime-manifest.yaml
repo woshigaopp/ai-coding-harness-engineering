@@ -1,5 +1,5 @@
 schema_version: 1
-runtime_version: contextpack-runtime-2026.07.14.4
+runtime_version: contextpack-runtime-2026.07.17.1
 protocol: stage-construction-v1
 compatibility:
   workflow_schema_min: 2
@@ -100,19 +100,19 @@ components:
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   stage_construction_contract:
     path: templates/stage-construction-contracts.yaml
-    sha256: 04050bd39531f4f4770aca1d7f382b9080d8920b5c76abd6f3c14345758cf0c5
+    sha256: bf6d41e4f2b4f1bd408511f62f455861cef58c708af6ff1b66f9fcd45ed469f8
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, mock-acceptance, product-acceptance]
   workflow_state_machine:
     path: templates/workflow-state-machine.yaml
-    sha256: 7e192678ecabc9f42a45dc025d2f6622b38e0a5953e9cabca5f58b623fe8bec7
+    sha256: 1dff577a70cea69387d5955354601aa5d0a5d8d852b67023ff1566eb58a90f79
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   workflowctl:
     path: scripts/workflowctl.py
-    sha256: 76912bb16b7ada3996493bc1274053f95926c683d8b9687776ec671e4d3a4ec4
+    sha256: 0b90e843cbb3a5fb5c3eeba89902af5efdb89e6a1a47fb8fe6aecac2d604d9d7
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   validate_artifacts:
     path: scripts/validate_artifacts.py
-    sha256: 91687e55ceb4b51f091e8357fb17b8ce4bd9e3b9de0cb851f4c5385bc7e62511
+    sha256: 8229e44a4ba2ee2760bf0c1eb6c635e1d7a9b4300aad9c9f90b9b4256262b9bf
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, mock-acceptance, product-acceptance]
   atomic_issue_compile:
     path: scripts/atomic_issue_compile.py
@@ -120,7 +120,7 @@ components:
     affected_stages: [task-planning, execution, mock-acceptance, product-acceptance]
   validate_skill_suite:
     path: scripts/validate_skill_suite.py
-    sha256: dddc826fc9772422b26054d276e2e5d7a709ffe935e58900acd63f5764ed1092
+    sha256: ba7de6aab8a08a4f001159b359b9c9ca5dbf9710d34bcf04fa85385ff1e8a6f8
     behavior_affecting: false
     affected_stages: []
   atomic_issue_quality_review_template:
@@ -133,7 +133,7 @@ components:
     affected_stages: [execution, mock-acceptance, product-acceptance]
   multi_perspective_review_template:
     path: templates/multi-perspective-review.yaml
-    sha256: 3c6d3b0a96654bf8ae39d11035756930daa24a5622a0d8478576145e38d6a2e7
+    sha256: 6054a7aaac25b644fa4f1fb6f929eafe1ba5e667d6c9e3f53cc70384829516f3
     affected_stages: [prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, mock-acceptance, product-acceptance]
   launch_readiness_review_template:
     path: templates/launch-readiness-review.md
@@ -149,7 +149,7 @@ components:
     affected_stages: [task-planning, execution]
   stage_construction_protocol:
     path: references/stage-construction-protocol.md
-    sha256: 3fa3b8adef05d423d5c09bbd2e48a5383f4c3d1cc5868de1e16464062ce85f24
+    sha256: d2be093c1fa56c42190bb1dc7aa16cb0a122018f8ce188b87a884320af3e7360
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, mock-acceptance, product-acceptance]
   artifact_completeness_spec:
     path: references/artifact-completeness-spec.md
@@ -161,13 +161,13 @@ components:
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   runtime_resource_bundle:
     paths_file: templates/runtime-resource-index.yaml
-    sha256: 4ea2dd740507d0d938647345a4e5eb75e4093fca33452b8e8bd6c80594ce1994
+    sha256: 0d52b7f06f2d37d4d3f8234d8a4992a9991e9bb7f587210681f127948354c3fc
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   contextpack_skill:
     path: ../automq-ai-dev-workflow-contextpack/SKILL.md
-    sha256: fdaf74c365b0070f20820ee25f0026f4388082024e8713d272d9fa68ea431061
+    sha256: 4474e10f0d6c41354f75a900d7d333fd7ee861d55a05f4aac53599df2298ddd3
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   contextpack_rule_reference:
     path: ../automq-ai-dev-workflow-contextpack/references/workflow-rule-reference.md
-    sha256: 928ec1832e2c2f2b4c3243fc351e360f63f2120621d623b87e0b53804ce0a05e
+    sha256: a36e62b5c28ddd6bf83d8a90be6ac26911dba379c0d45a10b7e816658a188efc
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]

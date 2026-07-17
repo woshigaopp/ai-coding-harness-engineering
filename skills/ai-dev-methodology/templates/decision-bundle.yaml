@@ -1,0 +1,25 @@
+schema_version: 1
+bundle_id: HDB-001
+stage: prd
+prompt_snapshot: >-
+  Replace with the complete decision bundle shown to the user, including the background,
+  recommendation, alternatives, impact, and requested response for every listed decision.
+prompt_hash: REPLACE_WITH_SHA256_OF_PROMPT_SNAPSHOT_PLUS_NEWLINE
+response_scope: all-listed
+user_response: REPLACE_WITH_EXACT_AFFIRMATIVE_RESPONSE_CONFIRMING_ALL_LISTED_DECISIONS
+status: locked
+decided_at: 'YYYY-MM-DDTHH:MM:SSZ'
+decisions:
+  - decision_id: PDEC-001
+    decision_key: replace.with.stable.key
+    recommendation: Replace with the recommendation shown in the sealed prompt.
+    alternatives: Replace with the alternatives and rejection reasons shown to the user.
+    impact: Replace with affected artifacts, semantics, verification, and downstream consumers.
+    batch_eligible: true
+  - decision_id: PDEC-002
+    decision_key: replace.with.second.stable.key
+    recommendation: Replace with the second recommendation shown in the sealed prompt.
+    alternatives: Replace with the second alternatives and rejection reasons shown to the user.
+    impact: Replace with the second decision's affected semantics, verification, and consumers.
+    batch_eligible: true
+receipt_hash: REPLACE_WITH_CANONICAL_JSON_SHA256_EXCLUDING_RECEIPT_HASH

@@ -7,6 +7,7 @@ schema_version: 1
 # artifacts and must not be used by a subagent to lock decisions or pass stages.
 
 review_scope:
+  review_kind: initial # initial | semantic-repair | projection-repair | format-repair
   change_dir: specs/changes/<change-id>
   stage_under_review: "" # canonical stage id: prd | aip | readiness | design | archaeology | migration | frontend-contract | contract | verification | task-planning | pre-execution | mock-acceptance | product-acceptance
   gate_name: ""
@@ -17,6 +18,14 @@ review_scope:
   reviewer_count_rule: "" # e.g. "medium=2, high=3-4, critical<=5; task-local uses task-semantic-review.yaml"
   synchronization_rule: "Main agent must wait for all required reviewer final findings before passing this gate or entering the next stage."
   authority_rule: "Reviewers produce findings only. Main agent owns accepted/rejected/deferred/backflow disposition and all canonical artifact updates."
+
+# Required only when review_kind is not initial. It proves this is a narrowed
+# rereview of a completed earlier review, not an initial-review bypass.
+repair_context:
+  previous_review_ref: "" # immutable prior review artifact/event/receipt reference
+  triggering_findings: [] # exact finding IDs or validator failures being repaired
+  changed_artifacts: [] # canonical artifacts changed since the prior review
+  narrowed_review_reason: "" # why one or more selected perspectives cover this repair
 
 frozen_input_packet:
   stage_objective: ""

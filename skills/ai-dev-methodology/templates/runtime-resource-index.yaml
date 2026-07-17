@@ -5,6 +5,7 @@ resources:
   - templates/source-intake-ledger.md
   - templates/code-scope-discovery.md
   - templates/user-decision-interaction.md
+  - templates/decision-bundle.yaml
   - templates/stage-decision-document.md
   - templates/decision-registry.md
   - templates/engineering-propose-intake.md
@@ -34,3 +35,4 @@ resources:
   - templates/contracts.yaml
   - templates/verification.yaml
   - templates/backflow.yaml
+  - templates/workflow-defects.yaml
