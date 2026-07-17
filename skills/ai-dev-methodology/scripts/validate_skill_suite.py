@@ -874,6 +874,96 @@ x
         if canonical_values != ["services/Foo.java"]:
             errors.append(f"{validator_name}: canonical Current Architecture evidence was not extracted: {canonical_values}")
 
+    downstream_design_sources = design_sources + """
+
+## New Feature Design
+
+### Design Decision Registry
+| ID | Decision | Status |
+|---|---|---|
+| DESIGN-DEC-001 | Split the downstream coordinator after AIP acceptance. | locked |
+
+### Current Architecture Understanding
+| Area | Current architecture / behavior | Evidence path / command | Engineering implication | Gap / DEC |
+|---|---|---|---|---|
+| downstream | design-stage discovery | services/Downstream.java | design-owned module split | DESIGN-DEC-001 |
+"""
+    for validator_name, object_ids in [
+        (str(WORKFLOWCTL), workflowctl.aip_materialization_object_ids(downstream_design_sources)),
+        (str(ARTIFACT_VALIDATOR), artifact_validator.aip_materialization_object_ids(downstream_design_sources)),
+    ]:
+        if "ADEC-001" not in object_ids or "FACT-001" not in object_ids:
+            errors.append(f"{validator_name}: AIP-owned materialization objects were dropped: {sorted(object_ids)}")
+        if "DESIGN-DEC-001" in object_ids:
+            errors.append(f"{validator_name}: downstream DESIGN-DEC was treated as an AIP materialization obligation")
+
+    with tempfile.TemporaryDirectory(prefix="aip-materialization-snapshot-") as tmp:
+        snapshot_dir = Path(tmp)
+        (snapshot_dir / "stage-snapshots").mkdir()
+        (snapshot_dir / "plan.md").write_text(downstream_design_sources, encoding="utf-8")
+        (snapshot_dir / "stage-snapshots" / "aip-plan.md").write_text(design_sources, encoding="utf-8")
+        workflowctl.write_yaml(snapshot_dir / "workflow-state.yaml", {"stage_status": {"aip": "passed"}})
+        model = workflowctl.WorkflowModel(snapshot_dir)
+        pending_sources = [
+            workflowctl.aip_materialization_plan_source(model, "aip"),
+            artifact_validator.aip_materialization_plan_source(
+                snapshot_dir,
+                downstream_design_sources,
+                {"stage_status": {"aip": "pending-rewrite", "design": "pending-rewrite"}},
+            ),
+        ]
+        if any("DESIGN-DEC-001" in source or "services/Downstream.java" in source for source in pending_sources):
+            errors.append("AIP repair consumed a downstream-owned plan addendum")
+        if any("ADEC-001" not in source or "services/Foo.java" not in source for source in pending_sources):
+            errors.append("AIP repair prefix filtering dropped AIP-owned plan content")
+        selected_sources = [
+            (
+                str(WORKFLOWCTL),
+                workflowctl.aip_materialization_plan_source(model, "design"),
+            ),
+            (
+                str(ARTIFACT_VALIDATOR),
+                artifact_validator.aip_materialization_plan_source(
+                    snapshot_dir,
+                    downstream_design_sources,
+                    {"stage_status": {"aip": "passed", "design": "pending-rewrite"}},
+                ),
+            ),
+        ]
+        materialized_aip = aip_self_report.replace(
+            "| create autoscaling policy during create |",
+            "| ADEC-001 create autoscaling policy during create |",
+        )
+        for validator_name, selected_source in selected_sources:
+            if "DESIGN-DEC-001" in selected_source or "services/Downstream.java" in selected_source:
+                errors.append(f"{validator_name}: downstream plan content leaked past the accepted AIP snapshot")
+            if "ADEC-001" not in selected_source or "services/Foo.java" not in selected_source:
+                errors.append(f"{validator_name}: accepted AIP materialization source lost AIP-owned content")
+        (snapshot_dir / "stage-snapshots" / "aip-plan.md").unlink()
+        missing_snapshot_sources = [
+            workflowctl.aip_materialization_plan_source(model, "design"),
+            artifact_validator.aip_materialization_plan_source(
+                snapshot_dir,
+                downstream_design_sources,
+                {"stage_status": {"aip": "passed", "design": "pending-rewrite"}},
+            ),
+        ]
+        if any(source for source in missing_snapshot_sources):
+            errors.append("AIP materialization source fell back to mutable plan.md after the accepted snapshot was removed")
+        (snapshot_dir / "stage-snapshots" / "aip-plan.md").write_text(design_sources, encoding="utf-8")
+        wf_snapshot_errors = workflowctl.validate_aip_narrative_materialization(
+            materialized_aip, selected_sources[0][1], "aip.md"
+        )
+        artifact_snapshot_errors = artifact_validator.validate_aip_narrative_materialization(
+            snapshot_dir, materialized_aip, selected_sources[1][1], "aip.md"
+        )
+        for validator_name, snapshot_errors in [
+            (str(WORKFLOWCTL), wf_snapshot_errors),
+            (str(ARTIFACT_VALIDATOR), artifact_snapshot_errors),
+        ]:
+            if any("DESIGN-DEC-001" in error or "services/Downstream.java" in error for error in snapshot_errors):
+                errors.append(f"{validator_name}: downstream design content retroactively invalidated AIP: {snapshot_errors}")
+
     internal_api_aip = aip_self_report.replace("FACT-001", "locked N/A").replace("call production provider policy API with owner service", "call internal service API with owner service")
     internal_api_aip = internal_api_aip.replace("provider API 和 policy 创建机制", "内部 API 和 policy 创建机制")
     mech_errors = workflowctl.validate_mechanism_design_closure(internal_api_aip, "aip.md")

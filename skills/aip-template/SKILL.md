@@ -54,5 +54,6 @@ Rules:
 
 - Each design question must be an operation/surface-level question, not a broad capability label.
 - The selected mechanism must be concrete enough that archaeology/contract/task-planning do not need to invent provider API, runtime shape, state owner, field semantics, or failure behavior.
-- Every locked ADEC/DEC and every design-affecting MECH/FACT/CONSTRAINT must appear in the AIP narrative or the materialization gate with `materialized`, `locked N/A`, or `blocked`.
+- Every AIP-owned locked ADEC/DEC and every AIP-time design-affecting MECH/FACT/CONSTRAINT must appear in the AIP narrative or the materialization gate with `materialized`, `locked N/A`, or `blocked`.
+- Do not retroactively require readiness/design/archaeology/migration/frontend/verification/task-planning decisions to appear in AIP. Backflow only when downstream evidence proves an AIP-owned decision or mechanism was missing or wrong.
 - `blocked` means the AIP is not ready for downstream stages.

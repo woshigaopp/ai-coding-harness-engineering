@@ -258,6 +258,8 @@ Context pack 必须从磁盘 canonical artifacts 重新生成，包含 source le
 
 已 `passed` 的 plan-bearing 上游必须从 `stage-snapshots/<stage>-plan.md` 恢复接受时语义；`plan.md` 只是当前阶段继续扩展的工作副本，不能用它覆盖或重新解释 snapshot。上游 backflow 后由 `pass-stage` 替换 snapshot，再重新生成下游 context pack。
 
+AIP narrative materialization 只消费 AIP 当时拥有的 ADEC/DEC、MECH/FACT/CONSTRAINT 和 Current Architecture evidence。readiness、design、archaeology、migration、frontend、verification、task-planning 后续新增的阶段决策属于各自 owner stage，不得因共享 `plan.md` 增长而反向制造 AIP backflow；只有它们证明 AIP 原有方案本身缺失或错误时，才按真实语义缺口回流 AIP。
+
 缺失或不完整时先回流上游；不得写下游 candidate artifact。
 
 ## Human Decisions
