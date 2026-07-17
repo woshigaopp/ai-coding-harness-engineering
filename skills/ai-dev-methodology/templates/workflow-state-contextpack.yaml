@@ -4,8 +4,8 @@ workflow:
   profile: full
   stage_construction_protocol: stage-construction-v1
   runtime:
-    version: contextpack-runtime-2026.07.17.1
-    manifest_sha256: c30e82ea68a97fb536881c4c2b9af389da64ad367a0afb7a76db3fba0d8d98a2
+    version: contextpack-runtime-2026.07.17.2
+    manifest_sha256: c9dd08f5a2644778c8a94e2230853738e0e7205ada8ae1b554cd724554735a72
     component_hashes:
       product_requirement_design_skill: 7925236001a0fb15a66769753f7e6fdf32ab9d36aa8edf842432204f8589f6a8
       aip_template_skill: cc32fc7a8d0339e50a4fbce00b38543e16c8f3d82a899b5fbb0d0733ce3dcbeb
@@ -27,22 +27,22 @@ workflow:
       methodology_skill: 132be8c3753cd73843829efaf4420104a9b705414a1e85552b53f4231453b992
       stage_construction_contract: bf6d41e4f2b4f1bd408511f62f455861cef58c708af6ff1b66f9fcd45ed469f8
       workflow_state_machine: 1dff577a70cea69387d5955354601aa5d0a5d8d852b67023ff1566eb58a90f79
-      workflowctl: 0b90e843cbb3a5fb5c3eeba89902af5efdb89e6a1a47fb8fe6aecac2d604d9d7
-      validate_artifacts: 8229e44a4ba2ee2760bf0c1eb6c635e1d7a9b4300aad9c9f90b9b4256262b9bf
+      workflowctl: c09459f26106ac287936ffd769d222163fe92073e90f757e6d69af7b48f7d78d
+      validate_artifacts: b2b8bce093eae79079d59cfbc3a36956231c0b5fa6b952f5685c6b91ed0a1ae1
       atomic_issue_compile: 15cdaa878ffa4ce44cbd28c9359094cd8d439ef0b3aea87e3febc34d9a8fc4ec
-      validate_skill_suite: ba7de6aab8a08a4f001159b359b9c9ca5dbf9710d34bcf04fa85385ff1e8a6f8
+      validate_skill_suite: db5e2d1ddd44f8cc797d676cf4164a85e48a448fa5b61129f9626cc0527c52ed
       atomic_issue_quality_review_template: 5dd708514d1dc250b62121af5c76adf9fc51e4aec18b8e40d23741917e402a6b
       task_semantic_review_template: 3472aedc84864c2e7e621a2fd4b5f8026ece6d830f0404641ecec8b4f6de6eb1
-      multi_perspective_review_template: 6054a7aaac25b644fa4f1fb6f929eafe1ba5e667d6c9e3f53cc70384829516f3
+      multi_perspective_review_template: d56b5073ad4f9c20f1ffca8570a52c33f532f7df1c399637bd066d0206552a88
       launch_readiness_review_template: c35b1afcf556d6787e481aec8717b81acd14b587580c1783b595f2d239dc059d
       atomic_issue_packet_schema: 79fc56a90fb845af8fd5d478861f3b5340ac0f7456d8d0300037cb8d8c073f31
       atomic_issue_template: 1d1f0c9b1da99e38f9b36b881c61c2bac9e60ae240331d4de5ccedd9e76f1973
-      stage_construction_protocol: d2be093c1fa56c42190bb1dc7aa16cb0a122018f8ce188b87a884320af3e7360
-      artifact_completeness_spec: 85b1868bc16e40be99af387c3500af01aec458727f60e2da8ccabb687a64e702
+      stage_construction_protocol: 6fa4ae006e607946831641f4ef023c52a3244b48f39a9360351dac257d1aea9c
+      artifact_completeness_spec: 00a356cfc896ec8945b4f12c31ab4b419f8d61c83c90f61e1fe1beb6ad096dc9
       runtime_resource_routing: c4575a264fe8d620366d9efa53bafc59a485477e340f4bf4dcb7ef0fdbc412ca
-      runtime_resource_bundle: 0d52b7f06f2d37d4d3f8234d8a4992a9991e9bb7f587210681f127948354c3fc
-      contextpack_skill: 4474e10f0d6c41354f75a900d7d333fd7ee861d55a05f4aac53599df2298ddd3
-      contextpack_rule_reference: a36e62b5c28ddd6bf83d8a90be6ac26911dba379c0d45a10b7e816658a188efc
+      runtime_resource_bundle: b1d8018d68b56451286696200c705c5fe59c7620ec4c7ba5f409d594ca34d862
+      contextpack_skill: d8dfd501509bafbfafdf0ba321895cc885a4b8c884662edc095fd184b8b74f33
+      contextpack_rule_reference: a4a322b99dafd1cc46738380807cede17488fe5242f1b245c5136bdd1fb30d8f
   change_id: CHANGE-ID
   change_dir_abs: ""
   worktree_path: ""

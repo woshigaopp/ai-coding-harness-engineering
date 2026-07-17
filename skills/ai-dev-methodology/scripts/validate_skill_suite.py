@@ -2054,6 +2054,10 @@ frozen_input_packet:
     - PRD
   non_reviewable_scope:
     - code
+  digest_policy:
+    stage_artifact_digest: workflowctl.artifact_receipt_digest
+    workflow_workdir_policy: normalized-identity-before-resume-verification
+    treat_receipt_digest_as_raw_sha256: false
   decision_surface_inputs:
     required_when_applicable: false
 reviewers:
@@ -2106,7 +2110,19 @@ gate_result:
                 errors.append(f"{validator_name}: repair review bypassed initial-review evidence")
         repair_review["repair_context"] = {
             "previous_review_ref": "multi-perspective-reviews/archive/prd-initial.yaml",
-            "triggering_findings": ["MPR-001"],
+            "triggering_findings": [
+                {
+                    "finding_id": "MPR-001",
+                    "perspective": "product-semantics",
+                    "root_cause": "The canonical PRD owner omitted one product invariant.",
+                    "canonical_owner": "proposal.md#Product Semantics",
+                    "invariant": "The repaired product semantic remains consistent in all projections.",
+                    "affected_artifacts": ["proposal.md"],
+                    "projection_targets": ["spec.md#Acceptance Scenarios"],
+                    "deterministic_proof": "workflowctl preflight-stage-closures prd passes.",
+                    "negative_assertion": "No stale contradictory product semantic remains.",
+                }
+            ],
             "changed_artifacts": ["proposal.md"],
             "narrowed_review_reason": "Only the accepted product-semantics finding changed in this repair.",
         }
@@ -2117,6 +2133,33 @@ gate_result:
         ]:
             if any("requires at least" in error for error in review_errors):
                 errors.append(f"{validator_name}: one-reviewer semantic repair was rejected by review policy")
+            if any("triggering finding perspectives" in error for error in review_errors):
+                errors.append(f"{validator_name}: correctly scoped repair perspectives were rejected")
+
+        bad_repair = copy.deepcopy(repair_review)
+        bad_repair["repair_context"]["triggering_findings"][0]["projection_targets"] = []
+        bad_repair["reviewers"][0]["perspective"] = "architecture-owner"
+        workflowctl.write_yaml(bad_mpr / "multi-perspective-reviews" / "prd.yaml", bad_repair)
+        for validator_name, review_errors in [
+            (str(WORKFLOWCTL), workflowctl.validate_multi_perspective_review(workflowctl.WorkflowModel(bad_mpr), "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.validate_multi_perspective_review(bad_mpr, "prd")),
+        ]:
+            if not any("projection_targets" in error for error in review_errors):
+                errors.append(f"{validator_name}: repair review accepted an unclosed projection set")
+            if not any("exactly match triggering finding perspectives" in error for error in review_errors):
+                errors.append(f"{validator_name}: repair review accepted unrelated reviewer perspectives")
+
+        extra_reviewer_repair = copy.deepcopy(repair_review)
+        extra_reviewer = copy.deepcopy(extra_reviewer_repair["reviewers"][0])
+        extra_reviewer["reviewer_id"] = "R-extra"
+        extra_reviewer_repair["reviewers"].append(extra_reviewer)
+        workflowctl.write_yaml(bad_mpr / "multi-perspective-reviews" / "prd.yaml", extra_reviewer_repair)
+        for validator_name, review_errors in [
+            (str(WORKFLOWCTL), workflowctl.validate_multi_perspective_review(workflowctl.WorkflowModel(bad_mpr), "prd")),
+            (str(ARTIFACT_VALIDATOR), artifact_validator.validate_multi_perspective_review(bad_mpr, "prd")),
+        ]:
+            if not any("reviewers count must exactly equal" in error for error in review_errors):
+                errors.append(f"{validator_name}: repair review accepted redundant same-perspective reviewers")
 
         if "source-intake" in workflowctl.MULTI_PERSPECTIVE_REVIEW_STAGES:
             errors.append(f"{WORKFLOWCTL}: source-intake must not require a multi-perspective review")
@@ -2439,6 +2482,7 @@ def validate_stage_construction_protocol() -> list[str]:
             errors.append(f"{METHODOLOGY / 'SKILL.md'}: missing stage construction wiring {phrase}")
     for command in [
         "prepare-stage",
+        "preflight-stage-closures",
         "validate-obligation",
         "validate-stage-construction",
         "migrate-workflow-runtime",
@@ -2474,6 +2518,16 @@ def validate_stage_construction_protocol() -> list[str]:
         return errors + [f"{ARTIFACT_VALIDATOR}: could not load contextpack isolation smoke module"]
     artifact_validator = importlib.util.module_from_spec(artifact_spec)
     artifact_spec.loader.exec_module(artifact_validator)
+    for name, pattern in [
+        ("workflowctl mechanism", workflowctl.MECHANISM_UNRESOLVED_RE),
+        ("artifact mechanism", artifact_validator.MECHANISM_UNRESOLVED_RE),
+        ("artifact external research", artifact_validator.EXTERNAL_RESEARCH_BLOCKED_RE),
+        ("artifact decision surface", artifact_validator.OPEN_DECISION_SURFACE_RE),
+    ]:
+        if pattern.search("status UNKNOWN implementation BLOCKED"):
+            errors.append(f"{name}: legal uppercase enum or implementation prose is treated as unresolved")
+        if not pattern.search("status unknown blocked TBD TODO 待确认 未知 未决"):
+            errors.append(f"{name}: real unresolved markers are no longer blocked")
     try:
         contract = workflowctl.load_stage_construction_contract()
     except Exception as exc:
@@ -2985,6 +3039,26 @@ initial note
                         errors.append(
                             f"{WORKFLOWCTL}: PRD obligation requires future-stage closure fields: {sorted(required)}"
                         )
+
+            preflight_ledger = copy.deepcopy(prd_ledger)
+            preflight_rows = [workflowctl.as_dict(row) for row in workflowctl.as_list(preflight_ledger.get("obligations"))]
+            if len(preflight_rows) >= 2:
+                expected_rules = []
+                for row in preflight_rows[:2]:
+                    row["status"] = "open"
+                    row["closure"] = {}
+                    row.pop("validation", None)
+                    expected_rules.append(str(row.get("rule_id")))
+                workflowctl.write_yaml(prd_ledger_path, preflight_ledger)
+                preflight_stderr = io.StringIO()
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(preflight_stderr):
+                    preflight_result = workflowctl.preflight_stage_closures(change_dir, "prd")
+                preflight_output = preflight_stderr.getvalue()
+                if preflight_result == 0 or not all(item in preflight_output for item in expected_rules):
+                    errors.append(
+                        f"{WORKFLOWCTL}: closure preflight did not aggregate row failures: {preflight_output}"
+                    )
+                workflowctl.write_yaml(prd_ledger_path, prd_ledger)
 
             workflow_before_stale = read(change_dir / "workflow-state.yaml")
             stale_workflow = workflowctl.as_dict(workflowctl.load_yaml(change_dir / "workflow-state.yaml"))
@@ -3666,6 +3740,33 @@ none
                     errors.append(f"{WORKFLOWCTL}: backend contract owner rule still depends on frontend UI-ACT IDs")
 
         runtime_bad = workflowctl.as_dict(workflowctl.load_yaml(strong_context_dir / "workflow-state.yaml"))
+        workflowctl.write_yaml(
+            strong_context_dir / "backflow.yaml",
+            {
+                "schema_version": 1,
+                "triggers": {
+                    "BF-LEGACY-OPEN": {
+                        "status": "open",
+                        "earliest_missing_stage": "prd",
+                        "required_backflow": "Repair the PRD projection before continuing.",
+                        "invalidates": {"artifacts": [], "decisions": [], "contracts": [], "verifications": [], "tasks": []},
+                    },
+                    "BF-LEGACY-RESOLVED": {
+                        "status": "resolved",
+                        "required_backflow": "Return to aip and repair the mechanism model.",
+                        "resolved_at": "2026-07-16T00:00:00+00:00",
+                        "resolution": "The historical AIP repair was completed and reviewed.",
+                        "invalidates": {"artifacts": [], "decisions": [], "contracts": [], "verifications": [], "tasks": []},
+                    },
+                },
+            },
+        )
+        if workflowctl.infer_historical_backflow_resolution_stage(
+            {"required_backflow": "Repair all affected artifacts before continuing."},
+            workflowctl.as_dict(workflowctl.load_yaml(strong_context_dir / "workflow-state.yaml")),
+            "BF-NONEXISTENT",
+        ):
+            errors.append(f"{WORKFLOWCTL}: pseudo-stage all was inferred as a backflow resolution stage")
         runtime_bad_pin = workflowctl.as_dict(workflowctl.as_dict(runtime_bad.get("workflow")).get("runtime"))
         runtime_bad_pin["version"] = "forged-runtime"
         workflowctl.as_dict(runtime_bad_pin.get("component_hashes"))["atomic_issue_template"] = "forged-component"
@@ -3681,6 +3782,49 @@ none
             migrated_status = workflowctl.as_dict(migrated_state.get("stage_status"))
             migrations = [workflowctl.as_dict(item) for item in workflowctl.as_list(migrated_state.get("runtime_migrations"))]
             latest_migration = migrations[-1] if migrations else {}
+            migrated_backflows = workflowctl.as_dict(
+                workflowctl.as_dict(workflowctl.load_yaml(strong_context_dir / "backflow.yaml")).get("triggers")
+            )
+            open_trigger = workflowctl.as_dict(migrated_backflows.get("BF-LEGACY-OPEN"))
+            resolved_trigger = workflowctl.as_dict(migrated_backflows.get("BF-LEGACY-RESOLVED"))
+            migration_reopens = [
+                workflowctl.as_dict(item)
+                for item in workflowctl.as_list(migrated_state.get("stage_reopens"))
+                if workflowctl.text(workflowctl.as_dict(item).get("backflow_id")) == "BF-LEGACY-OPEN"
+            ]
+            if open_trigger.get("resolution_stage") != "prd" or len(migration_reopens) != 1:
+                errors.append(f"{WORKFLOWCTL}: migration did not adopt historical open backflow atomically")
+            elif migration_reopens[0].get("execution_reset") is not False:
+                errors.append(f"{WORKFLOWCTL}: migration reopen falsely claimed an execution reset")
+            if resolved_trigger.get("resolution_stage") != "aip" or not workflowctl.as_dict(
+                resolved_trigger.get("legacy_resolution_evidence")
+            ):
+                errors.append(f"{WORKFLOWCTL}: migration did not seal historical resolved backflow evidence")
+            if workflowctl.validate_stage_reopens(workflowctl.WorkflowModel(strong_context_dir)):
+                errors.append(f"{WORKFLOWCTL}: runtime-migration reopen audit failed canonical validation")
+            if workflowctl.validate_backflow(workflowctl.WorkflowModel(strong_context_dir)):
+                errors.append(f"{WORKFLOWCTL}: migrated historical backflows failed canonical validation")
+            forged_legacy = copy.deepcopy(migrated_backflows)
+            evidence = workflowctl.as_dict(
+                workflowctl.as_dict(forged_legacy.get("BF-LEGACY-RESOLVED")).get("legacy_resolution_evidence")
+            )
+            evidence["adopted_at"] = "2099-01-01T00:00:00+00:00"
+            evidence["evidence_hash"] = workflowctl.stable_json_digest(
+                {key: value for key, value in evidence.items() if key != "evidence_hash"}
+            )
+            workflowctl.write_yaml(
+                strong_context_dir / "backflow.yaml",
+                {"schema_version": 1, "triggers": forged_legacy},
+            )
+            if not any(
+                "lacks a valid runtime migration audit" in error
+                for error in workflowctl.validate_backflow(workflowctl.WorkflowModel(strong_context_dir))
+            ):
+                errors.append(f"{WORKFLOWCTL}: self-hashed legacy evidence bypassed migration provenance")
+            workflowctl.write_yaml(
+                strong_context_dir / "backflow.yaml",
+                {"schema_version": 1, "triggers": migrated_backflows},
+            )
             if (
                 migrated_status.get("migration") != "not_applicable"
                 or migrated_status.get("execution") != "not_started"

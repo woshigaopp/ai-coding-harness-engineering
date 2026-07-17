@@ -72,8 +72,7 @@ MECHANISM_PLACEHOLDER_RE = re.compile(
     re.IGNORECASE,
 )
 MECHANISM_UNRESOLVED_RE = re.compile(
-    r"\b(?:TBD|TODO|unknown|open|待确认|未知|未决|后续决定|task-planning|implementation)\b|(?<![_-])\bblocked\b(?![_-])",
-    re.IGNORECASE,
+    r"\b(?:TBD|TODO|tbd|todo|unknown|open|blocked|待确认|未知|未决|后续决定)\b",
 )
 OBJECT_RE = re.compile(rf"^(?:SRC|REQ|SCN|C|MIG|VER)-\d{{3}}$|^{DECISION_ID_PATTERN}$|^T\d{{3}}$|^SCP-\d{{3}}(?:-T\d{{3}})?$")
 SCP_ID_RE = re.compile(r"^SCP-\d{3}(?:-T\d{3})?$")
@@ -1543,6 +1542,135 @@ def validate_workflow_runtime(workflow_doc: dict[str, Any]) -> list[str]:
     return errors
 
 
+def infer_historical_backflow_resolution_stage(
+    trigger: dict[str, Any],
+    workflow_doc: dict[str, Any],
+    backflow_id: str,
+) -> str:
+    explicit = text(trigger.get("resolution_stage"))
+    if explicit in STAGE_CONSTRUCTION_STAGES:
+        return explicit
+    earliest = text(trigger.get("earliest_missing_stage"))
+    if earliest in STAGE_CONSTRUCTION_STAGES:
+        return earliest
+    required_backflow = text(trigger.get("required_backflow"))
+    mentioned = [
+        stage
+        for stage in ALL_STAGES
+        if stage in STAGE_CONSTRUCTION_STAGES
+        and re.search(rf"(?<![A-Za-z-]){re.escape(stage)}(?![A-Za-z-])", required_backflow)
+    ]
+    if mentioned:
+        return min(mentioned, key=ALL_STAGES.index)
+    reopened = [
+        text(as_dict(item).get("stage"))
+        for item in as_list(workflow_doc.get("stage_reopens"))
+        if text(as_dict(item).get("backflow_id")) == backflow_id
+        and text(as_dict(item).get("stage")) in STAGE_CONSTRUCTION_STAGES
+    ]
+    return min(reopened, key=ALL_STAGES.index) if reopened else ""
+
+
+def upgrade_historical_backflows_for_runtime(
+    change_dir: Path,
+    workflow_doc: dict[str, Any],
+    previous_runtime_version: str,
+    current_runtime_version: str,
+    invalidated: set[str],
+    migrated_at: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    path = change_dir / "backflow.yaml"
+    if not path.exists():
+        return [], []
+    doc = as_dict(load_yaml(path))
+    triggers = as_dict(doc.get("triggers"))
+    upgrades: list[dict[str, Any]] = []
+    errors: list[str] = []
+    reopens = as_list(workflow_doc.get("stage_reopens"))
+    stage_receipts = as_dict(workflow_doc.get("stage_receipts"))
+    na_receipts = as_dict(workflow_doc.get("stage_na_receipts"))
+    for backflow_id, raw in triggers.items():
+        trigger = as_dict(raw)
+        status = text(trigger.get("status")).lower()
+        if status not in {"open", "blocked", "resolved", "closed"}:
+            continue
+        resolution_stage = infer_historical_backflow_resolution_stage(trigger, workflow_doc, str(backflow_id))
+        if not resolution_stage:
+            errors.append(
+                f"{backflow_id}: cannot infer historical resolution_stage; add earliest_missing_stage or required_backflow"
+            )
+            continue
+        changed_fields: list[str] = []
+        if text(trigger.get("resolution_stage")) != resolution_stage:
+            trigger["resolution_stage"] = resolution_stage
+            changed_fields.append("resolution_stage")
+        matching_reopen = any(
+            text(as_dict(item).get("backflow_id")) == str(backflow_id)
+            for item in reopens
+        )
+        if status in {"open", "blocked"} and not matching_reopen:
+            invalidated_stages = downstream_stage_closure(workflow_doc, resolution_stage)
+            invalidated.update(invalidated_stages)
+            stage_status = as_dict(workflow_doc.get("stage_status"))
+            execution_reset = "execution" in invalidated_stages and bool(
+                stage_status.get("execution") not in {None, "", "not_started"}
+                or as_dict(workflow_doc.get("execution_receipt"))
+                or as_dict(workflow_doc.get("task_receipts"))
+            )
+            removed_receipts = sorted(
+                stage
+                for stage in invalidated_stages
+                if stage in stage_receipts or stage in na_receipts
+            )
+            audit = {
+                "stage": resolution_stage,
+                "backflow_id": str(backflow_id),
+                "reason": "Runtime migration adopted a historical open backflow under the current recovery schema.",
+                "invalidated_stages": invalidated_stages,
+                "removed_receipts": removed_receipts,
+                "execution_reset": execution_reset,
+                "reopened_at": migrated_at,
+                "reopen_kind": "runtime-migration",
+                "command": f"python3 {Path(__file__).as_posix()} migrate-workflow-runtime {change_dir.as_posix()}",
+            }
+            audit["audit_hash"] = canonical_audit_hash(audit)
+            reopens.append(audit)
+            changed_fields.append("runtime-migration-reopen-audit")
+        if status in {"resolved", "closed"} and not as_dict(trigger.get("legacy_resolution_evidence")):
+            if not text(trigger.get("resolved_at")) or not text(trigger.get("resolution")):
+                errors.append(
+                    f"{backflow_id}: historical {status} backflow lacks resolved_at/resolution evidence"
+                )
+                continue
+            legacy_evidence = {
+                "from_runtime": previous_runtime_version or "legacy",
+                "adopted_by_runtime": current_runtime_version,
+                "resolution_stage": resolution_stage,
+                "historical_resolved_at": text(trigger.get("resolved_at")),
+                "historical_resolution": text(trigger.get("resolution")),
+                "adopted_at": migrated_at,
+            }
+            legacy_evidence["evidence_hash"] = stable_json_digest(legacy_evidence)
+            trigger["legacy_resolution_evidence"] = legacy_evidence
+            changed_fields.append("legacy_resolution_evidence")
+        if changed_fields:
+            triggers[str(backflow_id)] = trigger
+            upgrades.append(
+                {
+                    "backflow_id": str(backflow_id),
+                    "status": status,
+                    "resolution_stage": resolution_stage,
+                    "changes": changed_fields,
+                }
+            )
+    if errors:
+        return upgrades, errors
+    workflow_doc["stage_reopens"] = reopens
+    doc["triggers"] = triggers
+    write_yaml(path, doc)
+    return upgrades, []
+
+
 def migrate_workflow_runtime(
     change_dir: Path,
     profile: str | None = None,
@@ -1645,6 +1773,20 @@ def migrate_workflow_runtime(
             for affected_stage in affected:
                 invalidated.update(downstream_stage_closure(workflow_doc, affected_stage))
 
+    migrated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    backflow_upgrades, backflow_upgrade_errors = upgrade_historical_backflows_for_runtime(
+        change_dir,
+        workflow_doc,
+        text(previous_runtime.get("version")),
+        text(manifest.get("runtime_version")),
+        invalidated,
+        migrated_at,
+    )
+    if backflow_upgrade_errors:
+        for error in backflow_upgrade_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
     stage_receipts = as_dict(workflow_doc.get("stage_receipts"))
     na_receipts = as_dict(workflow_doc.get("stage_na_receipts"))
     for stage_name in invalidated:
@@ -1677,7 +1819,8 @@ def migrate_workflow_runtime(
         "invalidated_stages": [stage for stage in ALL_STAGES if stage in invalidated],
         "full_invalidation": full_invalidation,
         "scoped_from_stage": scoped_stage,
-        "migrated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "backflow_upgrades": backflow_upgrades,
+        "migrated_at": migrated_at,
     }
     migration["audit_hash"] = canonical_audit_hash(migration)
     migrations.append(migration)
@@ -1816,8 +1959,12 @@ def validate_stage_reopens(model: WorkflowModel) -> list[str]:
             errors.append(f"{label}.stage is invalid: {stage or '<empty>'}")
         if backflow_id not in model.backflow_triggers:
             errors.append(f"{label}.backflow_id does not reference backflow.yaml: {backflow_id or '<empty>'}")
-        if "reopen-stage" not in text(audit.get("command")):
-            errors.append(f"{label}.command must record workflowctl reopen-stage")
+        reopen_kind = text(audit.get("reopen_kind")) or "manual"
+        if reopen_kind not in {"manual", "runtime-migration"}:
+            errors.append(f"{label}.reopen_kind is invalid: {reopen_kind}")
+        expected_command = "migrate-workflow-runtime" if reopen_kind == "runtime-migration" else "reopen-stage"
+        if expected_command not in text(audit.get("command")):
+            errors.append(f"{label}.command must record workflowctl {expected_command}")
         if text(audit.get("audit_hash")) != canonical_audit_hash(audit):
             errors.append(f"{label}.audit_hash is forged or stale")
     return errors
@@ -4017,8 +4164,9 @@ def render_stage_execution_pack(ledger: dict[str, Any]) -> str:
         "",
         "1. 一次只处理一个 obligation。",
         "2. 在 canonical artifact 中闭合语义，再把路径、ID、断言和 downstream consumer 回写 ledger。",
-        "3. 运行 `validate-obligation` 写入行级 receipt 后再处理下一个 obligation。",
-        "4. 全部关闭后运行 `validate-stage-construction`、阶段 validator、readonly review 和 `pass-stage`。",
+        "3. closure 草稿完成后运行 `preflight-stage-closures`，一次修复全部 construction errors；该命令只读且不写 receipt。",
+        "4. 运行 `validate-obligation` 写入行级 receipt 后再处理下一个 obligation。",
+        "5. 全部关闭后运行 `validate-stage-construction`、阶段 validator、readonly review 和 `pass-stage`。",
         "",
         "## Stage Construction Inputs",
         "",
@@ -4597,6 +4745,42 @@ def validate_obligation(change_dir: Path, stage: str, obligation_id: str, not_ap
         {"stage": stage, "obligation_id": obligation_id, "status": target["status"]},
     )
     print(f"Obligation {obligation_id} validated and closed for stage {stage}")
+    return 0
+
+
+def preflight_stage_closures(change_dir: Path, stage: str) -> int:
+    if yaml is None:
+        print("PyYAML is required for workflowctl preflight-stage-closures", file=sys.stderr)
+        return 2
+    model = WorkflowModel(change_dir)
+    errors, ledger, expected_by_id = stage_construction_context(model, stage)
+    if ledger:
+        for row_value in as_list(ledger.get("obligations")):
+            row = as_dict(row_value)
+            expected = expected_by_id.get(text(row.get("obligation_id")))
+            if expected is None:
+                continue
+            probe = copy.deepcopy(row)
+            if text(probe.get("status")) not in {"closed", "not_applicable"}:
+                probe["status"] = "closed"
+            errors.extend(
+                stage_obligation_row_errors(
+                    change_dir,
+                    stage,
+                    probe,
+                    require_validation=False,
+                    expected=expected,
+                )
+            )
+        if stage == "prd":
+            errors.extend(validate_prd_construction_compatibility(change_dir))
+        if stage == "aip":
+            errors.extend(validate_aip_construction_compatibility(change_dir))
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+    print(f"Stage {stage} closure preflight passed; no files or receipts were modified")
     return 0
 
 
@@ -6008,10 +6192,41 @@ def validate_backflow(model: WorkflowModel) -> list[str]:
             )
             if not text(trigger.get("resolution")) or not text(trigger.get("resolved_at")):
                 errors.append(f"{bf_id}: resolved backflow requires resolution and resolved_at")
-            if text(trigger.get("resolution_receipt_stage")) != resolution_stage:
-                errors.append(f"{bf_id}: resolution_receipt_stage must equal resolution_stage")
-            if not receipt or text(trigger.get("resolution_receipt_hash")) != text(receipt.get("receipt_hash")):
-                errors.append(f"{bf_id}: resolution receipt is missing or stale")
+            legacy_evidence = as_dict(trigger.get("legacy_resolution_evidence"))
+            if legacy_evidence:
+                evidence_hash = text(legacy_evidence.get("evidence_hash"))
+                if evidence_hash != stable_json_digest({k: v for k, v in legacy_evidence.items() if k != "evidence_hash"}):
+                    errors.append(f"{bf_id}: legacy_resolution_evidence hash is forged or stale")
+                if text(legacy_evidence.get("resolution_stage")) != resolution_stage:
+                    errors.append(f"{bf_id}: legacy_resolution_evidence resolution_stage mismatch")
+                if text(legacy_evidence.get("historical_resolved_at")) != text(trigger.get("resolved_at")):
+                    errors.append(f"{bf_id}: legacy_resolution_evidence resolved_at mismatch")
+                if text(legacy_evidence.get("historical_resolution")) != text(trigger.get("resolution")):
+                    errors.append(f"{bf_id}: legacy_resolution_evidence resolution mismatch")
+                for field in ["from_runtime", "adopted_by_runtime", "adopted_at"]:
+                    if not text(legacy_evidence.get(field)):
+                        errors.append(f"{bf_id}: legacy_resolution_evidence.{field} is required")
+                migration = next(
+                    (
+                        as_dict(item)
+                        for item in as_list(model.workflow.get("runtime_migrations"))
+                        if text(as_dict(item).get("to_version")) == text(legacy_evidence.get("adopted_by_runtime"))
+                        and text(as_dict(item).get("migrated_at")) == text(legacy_evidence.get("adopted_at"))
+                        and any(
+                            text(as_dict(upgrade).get("backflow_id")) == str(bf_id)
+                            and "legacy_resolution_evidence" in as_list(as_dict(upgrade).get("changes"))
+                            for upgrade in as_list(as_dict(item).get("backflow_upgrades"))
+                        )
+                    ),
+                    {},
+                )
+                if not migration or text(migration.get("audit_hash")) != canonical_audit_hash(migration):
+                    errors.append(f"{bf_id}: legacy_resolution_evidence lacks a valid runtime migration audit")
+            else:
+                if text(trigger.get("resolution_receipt_stage")) != resolution_stage:
+                    errors.append(f"{bf_id}: resolution_receipt_stage must equal resolution_stage")
+                if not receipt or text(trigger.get("resolution_receipt_hash")) != text(receipt.get("receipt_hash")):
+                    errors.append(f"{bf_id}: resolution receipt is missing or stale")
         if status in {"open", "blocked"}:
             if not any(
                 text(as_dict(item).get("backflow_id")) == str(bf_id)
@@ -8274,6 +8489,27 @@ def normalize_multi_perspective_stage(value: str) -> str:
     return MULTI_PERSPECTIVE_STAGE_ALIASES.get(normalized, normalized)
 
 
+def repair_triggering_finding_errors(value: Any, label: str) -> tuple[list[str], set[str]]:
+    errors: list[str] = []
+    perspectives: set[str] = set()
+    rows = value if isinstance(value, list) else []
+    if not rows:
+        return [f"{label} must contain structured finding rows"], perspectives
+    for index, raw in enumerate(rows, 1):
+        row = as_dict(raw)
+        row_label = f"{label}[{index}]"
+        for field in ["finding_id", "perspective", "root_cause", "canonical_owner", "invariant", "deterministic_proof", "negative_assertion"]:
+            if len(text(row.get(field))) < 4:
+                errors.append(f"{row_label}.{field} is required and must be concrete")
+        perspective = text(row.get("perspective"))
+        if perspective:
+            perspectives.add(perspective)
+        for field in ["affected_artifacts", "projection_targets"]:
+            if not meaningful_list(row.get(field), min_chars=4):
+                errors.append(f"{row_label}.{field} must list concrete targets")
+    return errors, perspectives
+
+
 def validate_multi_perspective_review(model: WorkflowModel, stage: str) -> list[str]:
     errors: list[str] = []
     if stage not in MULTI_PERSPECTIVE_REVIEW_STAGES and stage != "all":
@@ -8334,8 +8570,11 @@ def validate_multi_perspective_review(model: WorkflowModel, stage: str) -> list[
         repair_context = as_dict(review_doc.get("repair_context"))
         if len(text(repair_context.get("previous_review_ref"))) < 8:
             errors.append("multi-perspective-review: repair_context.previous_review_ref is required for repair review")
-        if not meaningful_list(repair_context.get("triggering_findings"), min_chars=4):
-            errors.append("multi-perspective-review: repair_context.triggering_findings is required for repair review")
+        repair_errors, triggering_perspectives = repair_triggering_finding_errors(
+            repair_context.get("triggering_findings"),
+            "multi-perspective-review: repair_context.triggering_findings",
+        )
+        errors.extend(repair_errors)
         if not meaningful_list(repair_context.get("changed_artifacts"), min_chars=4):
             errors.append("multi-perspective-review: repair_context.changed_artifacts is required for repair review")
         if len(text(repair_context.get("narrowed_review_reason"))) < 12:
@@ -8352,6 +8591,13 @@ def validate_multi_perspective_review(model: WorkflowModel, stage: str) -> list[
         errors.append("multi-perspective-review: frozen_input_packet.reviewable_scope is required")
     if not isinstance(packet.get("non_reviewable_scope"), list) or not packet.get("non_reviewable_scope"):
         errors.append("multi-perspective-review: frozen_input_packet.non_reviewable_scope is required")
+    digest_policy = as_dict(packet.get("digest_policy"))
+    if text(digest_policy.get("stage_artifact_digest")) != "workflowctl.artifact_receipt_digest":
+        errors.append("multi-perspective-review: frozen_input_packet.digest_policy.stage_artifact_digest must be workflowctl.artifact_receipt_digest")
+    if text(digest_policy.get("workflow_workdir_policy")) != "normalized-identity-before-resume-verification":
+        errors.append("multi-perspective-review: frozen_input_packet.digest_policy.workflow_workdir_policy must describe the normalized identity digest")
+    if digest_policy.get("treat_receipt_digest_as_raw_sha256") is not False:
+        errors.append("multi-perspective-review: frozen_input_packet.digest_policy.treat_receipt_digest_as_raw_sha256 must be false")
 
     if scope_stage in {"prd", "readiness", "aip", "design", "contract", "verification", "task-planning", "pre-execution"}:
         ds_inputs = as_dict(packet.get("decision_surface_inputs"))
@@ -8410,6 +8656,19 @@ def validate_multi_perspective_review(model: WorkflowModel, stage: str) -> list[
         errors.append(f"multi-perspective-review: completed reviewer count {completed_count} is less than required_reviewer_count {required_count}")
     if required_count >= 2 and len(perspectives) < 2:
         errors.append("multi-perspective-review: stage-level review needs at least two distinct reviewer perspectives")
+    if review_kind != "initial":
+        if len(reviewers) != required_count:
+            errors.append(
+                "multi-perspective-review: repair reviewers count must exactly equal required_reviewer_count"
+            )
+        if required_count != len(triggering_perspectives):
+            errors.append(
+                "multi-perspective-review: repair required_reviewer_count must equal unique triggering finding perspectives"
+            )
+        if perspectives != triggering_perspectives:
+            errors.append(
+                "multi-perspective-review: repair reviewer perspectives must exactly match triggering finding perspectives"
+            )
 
     findings_raw = review_doc.get("findings")
     findings = findings_raw if isinstance(findings_raw, list) else []
@@ -11606,6 +11865,10 @@ def main() -> int:
     validate_obligation_parser.add_argument("change_dir", type=Path)
     validate_obligation_parser.add_argument("--not-applicable", action="store_true")
 
+    preflight_closures_parser = sub.add_parser("preflight-stage-closures")
+    preflight_closures_parser.add_argument("stage", choices=sorted(STAGE_CONSTRUCTION_STAGES))
+    preflight_closures_parser.add_argument("change_dir", type=Path)
+
     validate_stage_construction_parser = sub.add_parser("validate-stage-construction")
     validate_stage_construction_parser.add_argument("stage", choices=sorted(STAGE_CONSTRUCTION_STAGES))
     validate_stage_construction_parser.add_argument("change_dir", type=Path)
@@ -11709,6 +11972,8 @@ def main() -> int:
         )
     if args.command == "prepare-stage":
         return prepare_stage(args.change_dir, args.stage)
+    if args.command == "preflight-stage-closures":
+        return preflight_stage_closures(args.change_dir, args.stage)
     if args.command == "verify-resume":
         return verify_resume(args.change_dir)
     if args.command == "reopen-stage":

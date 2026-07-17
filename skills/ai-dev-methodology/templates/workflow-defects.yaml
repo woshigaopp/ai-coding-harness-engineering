@@ -1,5 +1,5 @@
 schema_version: 1
-runtime_version: contextpack-runtime-2026.07.17.1
+runtime_version: contextpack-runtime-2026.07.17.2
 defects:
   # LD-001:
   #   gate: validate-stage-construction
@@ -11,7 +11,7 @@ defects:
   #   affected_artifact: spec.md
   #   repair_action: "repair canonical artifact and rerun from PRD"
   #   promotion_target: "stage-construction-contracts.yaml + negative test"
-  #   runtime_version_introduced: contextpack-runtime-2026.07.17.1
+  #   runtime_version_introduced: contextpack-runtime-2026.07.17.2
   #   runtime_version_fixed: ""
   #   recurrence_count: 1
   #   status: open

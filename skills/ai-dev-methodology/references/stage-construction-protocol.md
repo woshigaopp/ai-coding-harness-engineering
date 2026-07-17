@@ -15,7 +15,8 @@
 Stage Construction Protocol 把已知规则从阶段末 gate 左移到阶段开始和构造过程。它不削弱 `workflowctl.py validate/pass-stage`，而是在最终 gate 前增加两个确定性边界：
 
 1. `prepare-stage`：根据已签收上游、机器可读规则和当前需求信号生成本阶段适用 obligation。
-2. `validate-obligation`：每完成一个语义对象就检查其闭合字段并写入行级 validation receipt。
+2. `preflight-stage-closures`：closure 草稿完成后只读扫描全部 obligation，集中返回 construction errors；PRD/AIP 同时运行全局兼容检查。
+3. `validate-obligation`：每完成一个语义对象就检查其闭合字段并写入行级 validation receipt。
 
 阶段末 `validate-stage-construction` 只接受全部 obligation 已关闭、行级 receipt 未过期、stage contract 和上游输入未漂移的 ledger。最终 `validate <stage>`、`validate_artifacts.py`、只读 reviewer 和 `pass-stage` 继续负责全局一致性、语义审查和 receipt。
 
@@ -65,10 +66,11 @@ context pack 不是长度门禁。每个 pack 必须包含：当前 source artif
 完成单个 obligation 后，在 ledger 中填充 closure 并运行：
 
 ```bash
+python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py preflight-stage-closures <stage> specs/changes/<change-id>
 python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowctl.py validate-obligation <stage> <obligation-id> specs/changes/<change-id>
 ```
 
-该命令通过后写入 row-level validation receipt。`file.md#Section` 只固定该 section；typed obligation 进一步只固定包含自身 `object_id` 的结构化行。closure 或该对象的语义内容变化会使 receipt stale，无关 section/row 和 presentation-only Markdown 变化不会扩大失效范围。canonical reference 缺 section 时直接失败，不能退化成整文件 hash。
+先运行的 preflight 不写文件或 receipt，会把 open row 临时按 `closed` 检查并一次报告全部缺口。随后逐条 `validate-obligation` 写入 row-level validation receipt。`file.md#Section` 只固定该 section；typed obligation 进一步只固定包含自身 `object_id` 的结构化行。closure 或该对象的语义内容变化会使 receipt stale，无关 section/row 和 presentation-only Markdown 变化不会扩大失效范围。canonical reference 缺 section 时直接失败，不能退化成整文件 hash。
 
 阶段末运行：
 
@@ -81,6 +83,8 @@ python3 ${CODEX_HOME:-$HOME/.codex}/skills/ai-dev-methodology/scripts/workflowct
 `pass-stage` 会再次执行 stage-construction 校验。没有 ledger、存在 open/pending-rewrite row、row receipt 过期、contract hash 过期或 input fingerprint 过期时不得签收。
 
 passed/N/A 阶段需要修复时，先记录并应用真实 backflow，再运行 `workflowctl.py reopen-stage <stage> <change-dir> --backflow-id <BF-ID> --reason <reason>`。该命令将当前及传递下游阶段置为 `pending-rewrite`、删除对应 receipt；只有 task-planning 或更早阶段失效并传递到 execution 时才清除 execution/task receipt，单独重做 acceptance 保留 execution。不得手改阶段状态。
+
+旧 runtime 迁移时，`migrate-workflow-runtime` 会先升级历史 backflow：从已有 `resolution_stage`、`earliest_missing_stage`、明确 stage 路由或历史 reopen audit 推断 owner stage。open/blocked trigger 在同一 migration 内生成 `runtime-migration` reopen audit 并一次失效 owner stage 与下游，禁止先 pass 再补 reopen；resolved/closed trigger 将历史 resolution 封存为绑定该 migration audit 的 `legacy_resolution_evidence`。无法可靠推断 stage 或缺失历史 resolution 证据时迁移直接阻断，不能猜测或伪造 receipt。
 
 ## Obligation 闭合模型
 
