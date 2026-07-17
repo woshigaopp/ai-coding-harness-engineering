@@ -1429,7 +1429,9 @@ def plan_append_only_errors(change_dir: Path, workflow_doc: dict[str, Any], stag
     if accepted_plan and not current_plan.startswith(accepted_plan):
         return [
             f"{stage}: plan.md rewrites accepted {upstream_stage} semantics; "
-            f"restore stage-snapshots/{upstream_stage}-plan.md as the prefix or backflow/reopen {upstream_stage}"
+            f"restore the accepted plan body after the generated `---` wrapper in "
+            f"stage-snapshots/{upstream_stage}-plan.md as the exact prefix (do not copy the snapshot header), "
+            f"or backflow/reopen {upstream_stage}"
         ]
     return []
 
@@ -2348,8 +2350,21 @@ def aip_sections_for_reference(markdown: str, section_ref: str) -> str:
 
 def current_architecture_evidence_values(markdown: str) -> list[str]:
     evidence: list[str] = []
+    required_headers = {
+        re.sub(r"[^a-z0-9]+", "", column.lower())
+        for column in (
+            "Area",
+            "Current architecture / behavior",
+            "Evidence path / command",
+            "Engineering implication",
+            "Gap / DEC",
+        )
+    }
     for row in markdown_table_dicts(markdown):
-        raw = table_get(row, "Evidence path / command", "Evidence", "Evidence path", "command")
+        normalized_headers = {re.sub(r"[^a-z0-9]+", "", key.lower()) for key in row}
+        if not required_headers <= normalized_headers:
+            continue
+        raw = table_get(row, "Evidence path / command")
         if not raw:
             continue
         if not re.search(r"(?:/|\\|\.java|\.ts|\.tsx|\.go|\.py|\.yaml|\.yml|\.tf|rg |grep |mvn |pnpm |npm |curl )", raw):
@@ -4754,6 +4769,7 @@ def preflight_stage_closures(change_dir: Path, stage: str) -> int:
         return 2
     model = WorkflowModel(change_dir)
     errors, ledger, expected_by_id = stage_construction_context(model, stage)
+    errors.extend(plan_append_only_errors(change_dir, model.workflow, stage))
     if ledger:
         for row_value in as_list(ledger.get("obligations")):
             row = as_dict(row_value)
@@ -9525,6 +9541,7 @@ def validate(change_dir: Path, stage: str) -> list[str]:
     errors.extend(validate_workflow_defects(change_dir))
     errors.extend(validate_stage_reopens(model))
     errors.extend(validate_workdir_identity(model))
+    errors.extend(plan_append_only_errors(change_dir, model.workflow, stage))
     errors.extend(validate_stage_status(model, stage))
     errors.extend(validate_stage_receipts(model, stage))
     if stage == "all":

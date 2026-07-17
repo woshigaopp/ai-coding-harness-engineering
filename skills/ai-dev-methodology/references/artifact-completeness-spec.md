@@ -38,6 +38,8 @@ Review rule:
 - obligation 集合必须来自 `templates/stage-construction-contracts.yaml` 的 always rules 和当前需求 signal，不得由 agent 自行删减。
 - closure 草稿完成后必须先运行只读 `preflight-stage-closures` 集中修复 construction errors；不得逐条调用 `validate-obligation` 才发现同类格式/引用缺口。
 - `mechanism-design-model.md` 对应 canonical model table 的定义行中，`MECH/OPSEQ/EXTAPI/EVT/RMM/RLM/FCM/MIM` 必须是唯一 row identity；同一 ID 定义两次，即使字段都非空，也必须在 AIP preflight 阻断。Local Audit、mapping 或其他表中的引用不算 canonical 定义。
+- Current Architecture evidence 只从包含 `Area / Current architecture / Evidence path / Engineering implication / Gap` 完整签名的 canonical table 提取；readiness audit、proof 或 mapping 表的通用 `Evidence` 列不得触发 AIP materialization。
+- 下游阶段的 `plan.md` 必须保留最近已通过 plan snapshot 中生成分隔线 `---` 之后的 accepted plan body 作为完整前缀，不得复制 snapshot wrapper/header；`preflight-stage-closures` 和常规 stage `validate` 必须在 review 前阻断 upstream rewrite，不能等 `pass-stage` 才发现。
 - 每个 obligation 必须先在 canonical artifact 中闭合，再用 `validate-obligation` 写入 fresh row-level receipt。
 - 当前阶段产生新 surface、mode、mutation、runtime、mock 或 frontend action signal 时，必须重跑 `prepare-stage`，不能等最终 gate 临时补字段。
 - `validate-stage-construction` 必须在 deterministic stage validator 和 readonly review 之前通过。

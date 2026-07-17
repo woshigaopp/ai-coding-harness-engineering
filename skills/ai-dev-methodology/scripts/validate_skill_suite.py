@@ -847,6 +847,33 @@ x
     if not any("marked materialized but is absent" in error for error in artifact_errors):
         errors.append(f"{ARTIFACT_VALIDATOR}: AIP narrative gate self-report smoke was not rejected")
 
+    unrelated_evidence_table = """## Readiness Local Audit Report
+| Audit scope | Evidence | Verdict |
+|---|---|---|
+| stage routing | decision-reviews/readiness-decisions.md | pass |
+"""
+    canonical_architecture_table = """## Current Architecture Understanding
+| Area | Current architecture / behavior | Evidence path / command | Engineering implication | Gap / DEC |
+|---|---|---|---|---|
+| runtime | current runtime path | services/Foo.java | preserve current owner | ADEC-001 |
+"""
+    for validator_name, unrelated_values, canonical_values in [
+        (
+            str(WORKFLOWCTL),
+            workflowctl.current_architecture_evidence_values(unrelated_evidence_table),
+            workflowctl.current_architecture_evidence_values(canonical_architecture_table),
+        ),
+        (
+            str(ARTIFACT_VALIDATOR),
+            artifact_validator.current_architecture_evidence_values(unrelated_evidence_table),
+            artifact_validator.current_architecture_evidence_values(canonical_architecture_table),
+        ),
+    ]:
+        if unrelated_values:
+            errors.append(f"{validator_name}: unrelated Evidence table was misclassified as Current Architecture evidence")
+        if canonical_values != ["services/Foo.java"]:
+            errors.append(f"{validator_name}: canonical Current Architecture evidence was not extracted: {canonical_values}")
+
     internal_api_aip = aip_self_report.replace("FACT-001", "locked N/A").replace("call production provider policy API with owner service", "call internal service API with owner service")
     internal_api_aip = internal_api_aip.replace("provider API 和 policy 创建机制", "内部 API 和 policy 创建机制")
     mech_errors = workflowctl.validate_mechanism_design_closure(internal_api_aip, "aip.md")
@@ -4428,8 +4455,17 @@ none
         if workflowctl.plan_append_only_errors(event_dir, append_only_state, "readiness"):
             errors.append(f"{WORKFLOWCTL}: append-only downstream plan extension was rejected")
         (event_dir / "plan.md").write_text("# Plan\n\n## AIP\nrewritten design\n", encoding="utf-8")
-        if not workflowctl.plan_append_only_errors(event_dir, append_only_state, "readiness"):
+        snapshot_rewrite_errors = workflowctl.plan_append_only_errors(event_dir, append_only_state, "readiness")
+        if not snapshot_rewrite_errors:
             errors.append(f"{WORKFLOWCTL}: downstream plan rewrite of accepted snapshot was allowed")
+        elif not any("after the generated `---` wrapper" in error and "do not copy the snapshot header" in error for error in snapshot_rewrite_errors):
+            errors.append(f"{WORKFLOWCTL}: snapshot rewrite diagnostic does not explain the accepted plan body boundary")
+        workflowctl.write_yaml(event_dir / "workflow-state.yaml", append_only_state)
+        preflight_output = io.StringIO()
+        with contextlib.redirect_stdout(preflight_output), contextlib.redirect_stderr(preflight_output):
+            preflight_result = workflowctl.preflight_stage_closures(event_dir, "readiness")
+        if preflight_result == 0 or "rewrites accepted aip semantics" not in preflight_output.getvalue():
+            errors.append(f"{WORKFLOWCTL}: closure preflight did not reject a downstream rewrite of the accepted plan snapshot")
 
         reviewer_output = event_dir / "reviewer-outputs" / "review-001.md"
         reviewer_output.parent.mkdir(parents=True)

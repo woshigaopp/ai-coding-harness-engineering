@@ -108,11 +108,11 @@ components:
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   workflowctl:
     path: scripts/workflowctl.py
-    sha256: 722a075364dfee5759da18d258ab5c2e2e65b395f8e221ff2cf462d3430d4900
+    sha256: a648439472304d34ec1c338d84e73dbe21bb6537dd04ab79b7e55e81928b8f1f
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, execution, mock-acceptance, product-acceptance]
   validate_artifacts:
     path: scripts/validate_artifacts.py
-    sha256: dfad38e1834c7ffdb48e1c035886f0f61516bfb3fc1db2303342fa00fb8ebab2
+    sha256: 288c218d853d48b090082fa23005ab86b551ec3b21d26f92d49b8ea48e2723bb
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, mock-acceptance, product-acceptance]
   atomic_issue_compile:
     path: scripts/atomic_issue_compile.py
@@ -120,7 +120,7 @@ components:
     affected_stages: [task-planning, execution, mock-acceptance, product-acceptance]
   validate_skill_suite:
     path: scripts/validate_skill_suite.py
-    sha256: fb1ea074dd36f187fce9e0963ee61c286ffbee50232ee05fd2634f02ed7ea2ff
+    sha256: f947037f1dd0c7ffda0b125b4b64b3c88a9217a86ae1d3abed4dd04d5d65fd57
     behavior_affecting: false
     affected_stages: []
   atomic_issue_quality_review_template:
@@ -153,7 +153,7 @@ components:
     affected_stages: [source-intake, prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, mock-acceptance, product-acceptance]
   artifact_completeness_spec:
     path: references/artifact-completeness-spec.md
-    sha256: 89bfae20ecea467e7aefc1a8ccdef215d4cd1c79ce48338965cce7754baf830c
+    sha256: 98808da5eed3ead9d8d619350d0101c200476657812645db6a2dff14f139f0c7
     affected_stages: [prd, aip, readiness, design, archaeology, migration, frontend-contract, contract, verification, task-planning, mock-acceptance, product-acceptance]
   runtime_resource_routing:
     path: references/runtime-resource-routing.md
