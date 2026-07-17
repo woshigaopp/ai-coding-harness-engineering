@@ -1574,6 +1574,42 @@ def design_object_ids(text: str) -> set[str]:
     return decision_ids | set(EXTERNAL_DESIGN_OBJECT_ID_RE.findall(text))
 
 
+def aip_materialization_object_ids(text: str) -> set[str]:
+    """Return objects owned by the AIP materialization gate."""
+    downstream_prefixes = (
+        "READY-DEC-", "ARCH-DEC-", "DESIGN-DEC-", "MIG-DEC-", "UI-DEC-", "VER-DEC-", "TASK-DEC-"
+    )
+    decision_ids = {
+        item
+        for item in DECISION_ID_RE.findall(text)
+        if not item.startswith("PDEC-") and not item.startswith(downstream_prefixes)
+    }
+    return decision_ids | set(EXTERNAL_DESIGN_OBJECT_ID_RE.findall(text))
+
+
+def aip_owned_plan_prefix(text: str) -> str:
+    """Exclude append-only sections owned by stages after AIP."""
+    downstream_heading = re.search(
+        r"^##\s+(?:Readiness Addendum|Requirement Readiness Review|New Feature Design|Code Archaeology|"
+        r"Migration(?: Diff)?|Frontend Contract|Cross-Module Contract|Verification Matrix|Atomic Task Planning|"
+        r"就绪性附录|需求就绪评审|新功能设计|代码考古|迁移差异|前端契约|跨模块契约|验证矩阵|原子任务规划)\s*$",
+        text,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    return text[:downstream_heading.start()] if downstream_heading else text
+
+
+def aip_materialization_plan_source(change_dir: Path, plan: str, workflow_state: dict) -> str:
+    """Use the accepted AIP plan boundary after the AIP stage has passed."""
+    stage_status = workflow_state.get("stage_status", {}) if isinstance(workflow_state.get("stage_status"), dict) else {}
+    snapshot_path = change_dir / "stage-snapshots" / "aip-plan.md"
+    if stage_status.get("aip") == "passed" and snapshot_path.is_file():
+        return read(snapshot_path)
+    if stage_status.get("aip") == "passed":
+        return ""
+    return aip_owned_plan_prefix(plan)
+
+
 AIP_SECTION_PATTERNS = [
     ("1. 背景", r"1[.．、]\s*背景"),
     ("2. 问题定义", r"2[.．、]\s*问题定义"),
@@ -1914,7 +1950,7 @@ def validate_aip_narrative_materialization(change_dir: Path, aip: str, design_so
                     errors.append(
                         f"{artifact}: design object {object_id} is marked materialized but is absent from the referenced AIP section body"
                     )
-    required_ids = design_object_ids(design_sources)
+    required_ids = aip_materialization_object_ids(design_sources)
     for object_id in sorted(required_ids):
         if object_id not in aip_text_without_gate:
             errors.append(f"{artifact}: design object {object_id} from AIP/design artifacts is not materialized in AIP section body")
@@ -5001,7 +5037,7 @@ def validate_aip_hard_gate(
         errors.extend(validate_mechanism_design_closure(change_dir, aip, str(aip_path)))
         design_sources = "\n".join(
             [
-                plan,
+                aip_materialization_plan_source(change_dir, plan, workflow_state),
                 read(change_dir / "decision-reviews" / "aip-decisions.md"),
                 read(change_dir / "external-capability-research.md"),
             ]
