@@ -2348,8 +2348,21 @@ def aip_sections_for_reference(markdown: str, section_ref: str) -> str:
 
 def current_architecture_evidence_values(markdown: str) -> list[str]:
     evidence: list[str] = []
+    required_headers = {
+        re.sub(r"[^a-z0-9]+", "", column.lower())
+        for column in (
+            "Area",
+            "Current architecture / behavior",
+            "Evidence path / command",
+            "Engineering implication",
+            "Gap / DEC",
+        )
+    }
     for row in markdown_table_dicts(markdown):
-        raw = table_get(row, "Evidence path / command", "Evidence", "Evidence path", "command")
+        normalized_headers = {re.sub(r"[^a-z0-9]+", "", key.lower()) for key in row}
+        if not required_headers <= normalized_headers:
+            continue
+        raw = table_get(row, "Evidence path / command")
         if not raw:
             continue
         if not re.search(r"(?:/|\\|\.java|\.ts|\.tsx|\.go|\.py|\.yaml|\.yml|\.tf|rg |grep |mvn |pnpm |npm |curl )", raw):
@@ -4754,6 +4767,7 @@ def preflight_stage_closures(change_dir: Path, stage: str) -> int:
         return 2
     model = WorkflowModel(change_dir)
     errors, ledger, expected_by_id = stage_construction_context(model, stage)
+    errors.extend(plan_append_only_errors(change_dir, model.workflow, stage))
     if ledger:
         for row_value in as_list(ledger.get("obligations")):
             row = as_dict(row_value)
@@ -7334,6 +7348,51 @@ def primary_mechanism_model_row_id(row: dict[str, str]) -> str:
     return ""
 
 
+CANONICAL_MECHANISM_MODEL_ROW_SCHEMAS = [
+    ("Sequence row", "OPSEQ", ("Ordered production steps", "External calls/resources")),
+    ("Parameter row", "EXTAPI", ("External system/API/resource", "Parameter / option")),
+    ("Event row", "EVT", ("Event / step", "State owner")),
+    ("Runtime row", "RMM", ("Mode / runtime", "New mode materialization design")),
+    ("Resource row", "RLM", ("Selection/provenance", "Create timing")),
+    ("Failure row", "FCM", ("Failure point", "Consistency invariant")),
+    ("Interface row", "MIM", ("Producer module", "Consumer module")),
+    ("Mechanism row", "MECH", ("Selected production mechanism", "Canonical owner")),
+]
+
+
+def canonical_mechanism_model_row_id(row: dict[str, str]) -> str:
+    normalized_headers = {re.sub(r"[^a-z0-9]+", "", key.lower()) for key in row}
+    for label, prefix, signature_columns in CANONICAL_MECHANISM_MODEL_ROW_SCHEMAS:
+        required_headers = {
+            re.sub(r"[^a-z0-9]+", "", column.lower())
+            for column in (label, *signature_columns)
+        }
+        if not required_headers <= normalized_headers:
+            continue
+        value = table_get(row, label).strip()
+        if re.fullmatch(rf"{prefix}-\d{{3}}", value):
+            return value
+    return ""
+
+
+def validate_mechanism_model_row_identity(markdown: str, artifact: str) -> list[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for row in markdown_table_dicts(markdown):
+        row_id = canonical_mechanism_model_row_id(row)
+        if not row_id:
+            continue
+        if row_id in seen:
+            duplicates.add(row_id)
+        seen.add(row_id)
+    if not duplicates:
+        return []
+    return [
+        f"{artifact}: mechanism model row IDs must be unique canonical identities; duplicate rows: "
+        + ", ".join(sorted(duplicates))
+    ]
+
+
 def validate_mechanism_design_model(model: WorkflowModel, stage: str) -> list[str]:
     errors: list[str] = []
     if stage not in {"aip", "readiness", "design", "archaeology", "contract", "frontend-contract", "verification", "task-planning", "pre-execution", "acceptance", "all"}:
@@ -7408,6 +7467,8 @@ def validate_mechanism_design_model(model: WorkflowModel, stage: str) -> list[st
                     errors.append(f"external-research: mechanism explanation {mechanism_id or '<missing>'} must map to mechanism-design-model.md row")
     if not body.strip():
         return errors
+
+    errors.extend(validate_mechanism_model_row_identity(body, "mechanism-design"))
 
     required_sections = {
         "Mechanism Row Inventory": [
@@ -9478,6 +9539,7 @@ def validate(change_dir: Path, stage: str) -> list[str]:
     errors.extend(validate_workflow_defects(change_dir))
     errors.extend(validate_stage_reopens(model))
     errors.extend(validate_workdir_identity(model))
+    errors.extend(plan_append_only_errors(change_dir, model.workflow, stage))
     errors.extend(validate_stage_status(model, stage))
     errors.extend(validate_stage_receipts(model, stage))
     if stage == "all":
