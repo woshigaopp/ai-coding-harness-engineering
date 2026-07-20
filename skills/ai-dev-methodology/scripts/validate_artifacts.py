@@ -1838,6 +1838,46 @@ def table_get(row: dict[str, str], *names: str) -> str:
     return ""
 
 
+def module_boundary_decision_rows_missing_evidence_or_risk(section_text: str) -> list[str]:
+    missing: list[str] = []
+    for headers, rows in markdown_tables(section_text):
+        normalized_headers = [header.strip().lower() for header in headers]
+        decision_indexes = [
+            index
+            for index, header in enumerate(normalized_headers)
+            if "decision" in header or "决策" in header
+        ]
+        if not decision_indexes:
+            continue
+        evidence_indexes = [
+            index
+            for index, header in enumerate(normalized_headers)
+            if any(marker in header for marker in ("evidence", "proof", "证据", "证明"))
+        ]
+        risk_indexes = [
+            index
+            for index, header in enumerate(normalized_headers)
+            if "risk" in header or "风险" in header
+        ]
+        for row in rows:
+            cells = row + [""] * max(0, len(headers) - len(row))
+            decision = next(
+                (
+                    cells[index].strip()
+                    for index in decision_indexes
+                    if index < len(cells) and cells[index].strip()
+                ),
+                "",
+            )
+            if not re.fullmatch(r"keep|split|merge|保留|拆分|合并", decision, re.IGNORECASE):
+                continue
+            has_evidence = any(index < len(cells) and cells[index].strip() for index in evidence_indexes)
+            has_risk = any(index < len(cells) and cells[index].strip() for index in risk_indexes)
+            if not has_evidence or not has_risk:
+                missing.append(decision)
+    return missing
+
+
 def flatten_text(value) -> str:
     if isinstance(value, dict):
         return " ".join(flatten_text(v) for v in value.values())
@@ -7376,7 +7416,7 @@ def validate_change(change_dir: Path, stage: str = "all") -> list[str]:
             )
         if re.search(r"needs-(?:contract|design)-review|unknown|待确认", boundary_validation, re.IGNORECASE):
             errors.append(f"{change_dir}: Module Boundary Validation contains unresolved review/unknown decisions")
-        if re.search(r"\|\s*(?:keep|split|merge|保留|拆分|合并)\s*\|\s*\|", boundary_validation, re.IGNORECASE):
+        if module_boundary_decision_rows_missing_evidence_or_risk(boundary_validation):
             errors.append(f"{change_dir}: Module Boundary Validation has boundary decisions without evidence/risk fields")
 
     if design_or_later_stage and re.search(r"Module Contract Graph|模块契约图", plan) and not re.search(
