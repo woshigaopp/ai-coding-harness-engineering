@@ -4,8 +4,8 @@ workflow:
   profile: full
   stage_construction_protocol: stage-construction-v1
   runtime:
-    version: contextpack-runtime-2026.07.17.4
-    manifest_sha256: a9be234396b4c1d77c50bcd894f1bef6a7d61bdb06b0b0ecbf8e94dc500dbb6f
+    version: contextpack-runtime-2026.07.20.1
+    manifest_sha256: 9bb3cf2f8f55175859d04635ab06c709303c66494a0624d60fd1c8b8ecdec3cf
     component_hashes:
       product_requirement_design_skill: 7925236001a0fb15a66769753f7e6fdf32ab9d36aa8edf842432204f8589f6a8
       aip_template_skill: d7a231ebaa7a93453e3bddda365bdbbeebe62bb2699ac39894559b81fc4d154b
@@ -25,12 +25,12 @@ workflow:
       convergence_retrospective_skill: 9271b0e1dc06d89b6f19d4a30a0506e305a451d6997e2328e6047b4505ba6f30
       decision_registry_skill: 49fb7382df2c068fe2ce9fce222640465c9923e86b1c0a7397d63ceda0fd9ffe
       methodology_skill: 132be8c3753cd73843829efaf4420104a9b705414a1e85552b53f4231453b992
-      stage_construction_contract: bf6d41e4f2b4f1bd408511f62f455861cef58c708af6ff1b66f9fcd45ed469f8
+      stage_construction_contract: a6a9a865597038a5d7b2d9945e7ec51956090a73ab945ee129b1cfe882b74d1b
       workflow_state_machine: 1dff577a70cea69387d5955354601aa5d0a5d8d852b67023ff1566eb58a90f79
       workflowctl: 960b480e18302d30ec92210785800dbe69254e9998db649e4be2c9eab035e72b
-      validate_artifacts: 6464126c7439d376505c338cba355d41d930d5cd257bcb7442da28abbdf18f62
+      validate_artifacts: da5093d62590aba50d92638e76268adf61cccad7a830282837172edf4ae01d1b
       atomic_issue_compile: 15cdaa878ffa4ce44cbd28c9359094cd8d439ef0b3aea87e3febc34d9a8fc4ec
-      validate_skill_suite: a8766af29de7c6d9e1cd1fef7efa0769a927322380c1f6e7002f7a55a645b78e
+      validate_skill_suite: a800639463e12fd93ad6cc28a3c56340ff1f55d75a6f1841a2a4767444c3f6b2
       atomic_issue_quality_review_template: 5dd708514d1dc250b62121af5c76adf9fc51e4aec18b8e40d23741917e402a6b
       task_semantic_review_template: 3472aedc84864c2e7e621a2fd4b5f8026ece6d830f0404641ecec8b4f6de6eb1
       multi_perspective_review_template: d56b5073ad4f9c20f1ffca8570a52c33f532f7df1c399637bd066d0206552a88
@@ -40,7 +40,7 @@ workflow:
       stage_construction_protocol: 6fa4ae006e607946831641f4ef023c52a3244b48f39a9360351dac257d1aea9c
       artifact_completeness_spec: e89556517e51d2c329fd1f26741c7f088f61f98eec9e22785b03b213de8a5808
       runtime_resource_routing: c4575a264fe8d620366d9efa53bafc59a485477e340f4bf4dcb7ef0fdbc412ca
-      runtime_resource_bundle: 1bddb2284ad2964e285e6a2d21b9d3e11f8d0f85bce6c06ea9abc93fc3a41d10
+      runtime_resource_bundle: b635d6f44a630e8ea3fe27147c360663e3d9daca1dd2d1aef34303b25014b151
       contextpack_skill: f3e295ddc7338c45f51329717db8c638ecd75947bb0ee05139762db9c2a4c101
       contextpack_rule_reference: a4a322b99dafd1cc46738380807cede17488fe5242f1b245c5136bdd1fb30d8f
   change_id: CHANGE-ID

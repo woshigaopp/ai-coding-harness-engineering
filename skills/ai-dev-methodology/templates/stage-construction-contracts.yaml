@@ -367,7 +367,7 @@ rules:
     title: 在逐项闭合时验证 AIP 全局 artifact 兼容性
     earliest_stage: aip
     phase: incremental
-    rationale: stage construction 必须前移发现外部研究表、机制模型、AIP 正文物化、工程完整度和主叙事语言缺口，不能等 pass-stage 才暴露。
+    rationale: stage construction 必须前移发现外部研究表、机制模型、AIP 正文物化、工程完整度和主叙事语言缺口，不能等 pass-stage 才暴露；Module Boundary Validation 必须按同一 Markdown row 的 evidence/risk/decision 列验证，禁止跨行正则误判 decision-last 表格。
     repair_stage: aip
     allow_not_applicable: false
     required_closure:

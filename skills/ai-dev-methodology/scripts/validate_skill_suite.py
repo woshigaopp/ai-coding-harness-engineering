@@ -1069,6 +1069,31 @@ x
             errors.append(
                 f"{WORKFLOWCTL}: SC-AIP-GLOBAL-COMPAT-001 did not reject an incompatible external fact matrix: {compatibility_errors}"
             )
+    valid_decision_last = """| Module | Ownership evidence | Too large risk | Too small risk | Decision |
+|---|---|---|---|---|
+| MOD-001 | single writer | bounded | none | keep |
+| MOD-002 | isolated state | none | coupling if split | split |
+"""
+    if artifact_validator.module_boundary_decision_rows_missing_evidence_or_risk(valid_decision_last):
+        errors.append(
+            f"{ARTIFACT_VALIDATOR}: row-local module boundary check rejected valid decision-last rows"
+        )
+    missing_evidence_or_risk = """| Module | Ownership evidence | Granularity risk | Decision |
+|---|---|---|---|
+| MOD-001 |  |  | keep |
+"""
+    if artifact_validator.module_boundary_decision_rows_missing_evidence_or_risk(missing_evidence_or_risk) != ["keep"]:
+        errors.append(
+            f"{ARTIFACT_VALIDATOR}: row-local module boundary check accepted missing evidence/risk"
+        )
+    valid_chinese_columns = """| 模块 | 所有权证据 | 粒度风险 | 决策 |
+|---|---|---|---|
+| MOD-001 | 单一写入方 | 拆分会破坏事务边界 | 保留 |
+"""
+    if artifact_validator.module_boundary_decision_rows_missing_evidence_or_risk(valid_chinese_columns):
+        errors.append(
+            f"{ARTIFACT_VALIDATOR}: row-local module boundary check rejected valid Chinese columns"
+        )
     return errors
 
 
